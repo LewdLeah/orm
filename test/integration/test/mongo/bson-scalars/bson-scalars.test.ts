@@ -85,6 +85,7 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
             decimal: Decimal128.fromString('1234.5600'),
             uuid: new Binary(uuid, 4),
             nested: { list: [1, 'two', { deep: objectId }] },
+            pattern: /^ab+c$/gi,
           },
         });
 
@@ -93,6 +94,12 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
 
         const [row] = await db.posts.all();
         const raw = row?.raw as Record<string, Record<string, unknown>>;
+        const pattern = raw['pattern'];
+        expect(pattern).toBeInstanceOf(RegExp);
+        expect([
+          (pattern as unknown as RegExp).source,
+          (pattern as unknown as RegExp).flags,
+        ]).toEqual(['^ab+c$', 'gi']);
         expect({
           objectId: [raw['objectId']?.['_bsontype'], raw['objectId']?.toString()],
           long: [raw['long']?.['_bsontype'], raw['long']?.toString()],
@@ -118,6 +125,7 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
         expectTypeOf<Row>().toEqualTypeOf<BsonValue | null>();
         expectTypeOf<Code>().toExtend<Row>();
         expectTypeOf<MinKey>().toExtend<Row>();
+        expectTypeOf<RegExp>().toExtend<Row>();
       }),
     timeouts.spinUpMongoMemoryServer,
   );

@@ -13,6 +13,7 @@ export type BsonScalar =
   | boolean
   | null
   | Date
+  | RegExp
   | { readonly _bsontype: 'ObjectId'; toHexString(): string }
   | { readonly _bsontype: 'Long'; toBigInt(): bigint }
   | { readonly _bsontype: 'Decimal128'; toString(): string }
@@ -39,11 +40,10 @@ export type BsonValue =
   | { readonly [key: string]: BsonValue };
 
 /**
- * What a `Bson` field accepts on write: any `BsonValue`, and also a native `RegExp` and a `Uint8Array` or `Buffer`, which the driver writes as BSON regex and binData subtype 0.
+ * What a `Bson` field accepts on write: any `BsonValue`, and also a `Uint8Array` or `Buffer`, which the driver writes as binData subtype 0 and reads back as `Binary`.
  */
 export type BsonInputValue =
   | BsonScalar
-  | RegExp
   | Uint8Array
   | ReadonlyArray<BsonInputValue>
   | { readonly [key: string]: BsonInputValue };

@@ -156,6 +156,7 @@ type BsonScalar =
   | boolean
   | null
   | Date
+  | RegExp
   | { readonly _bsontype: 'ObjectId'; toHexString(): string }
   | { readonly _bsontype: 'Long'; toBigInt(): bigint }
   | { readonly _bsontype: 'Decimal128'; toString(): string }
@@ -177,7 +178,6 @@ type BsonValue = BsonScalar | ReadonlyArray<BsonValue> | { readonly [key: string
 
 type BsonInputValue =
   | BsonScalar
-  | RegExp
   | Uint8Array
   | ReadonlyArray<BsonInputValue>
   | { readonly [key: string]: BsonInputValue };
