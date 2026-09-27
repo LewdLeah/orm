@@ -38,7 +38,7 @@ export const mongoFamilyEnumEntityDescriptor = {
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" @@type references unknown codec "${codecId}"`,
           sourceId,
-          span: codecSpan,
+          span: typeArgumentSpan(block) ?? codecSpan,
         });
         return undefined;
       }

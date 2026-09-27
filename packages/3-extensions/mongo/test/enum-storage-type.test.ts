@@ -68,3 +68,24 @@ describe('a Mongo enum over a codec without exactly one storage type', () => {
     },
   );
 });
+
+describe('a Mongo enum over an unknown codec', () => {
+  it('reports the unknown codec at the @@type argument', () => {
+    const schema = 'enum Shape {\n  @@type("mongo/nope@1")\n  a\n}\n';
+    const result = interpret(schema);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const start = schema.indexOf('"mongo/nope@1"');
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_EXTENSION_INVALID_VALUE',
+        message: 'enum "Shape" @@type references unknown codec "mongo/nope@1"',
+        span: expect.objectContaining({
+          start: expect.objectContaining({ offset: start }),
+          end: expect.objectContaining({ offset: start + '"mongo/nope@1"'.length }),
+        }),
+      }),
+    ]);
+  });
+});
