@@ -197,13 +197,40 @@ function splitArrayElements(inner: string): readonly ArrayElementToken[] | undef
   return tokens;
 }
 
+const BOOLEAN_ELEMENT_TYPE_PATTERN = /^(?:bool|boolean)$/;
+const BOOLEAN_TRUE_TOKEN_PATTERN = /^(?:t|true)$/i;
+const BOOLEAN_FALSE_TOKEN_PATTERN = /^(?:f|false)$/i;
+
+/**
+ * Reads an unquoted, non-NULL array element by the column's element type. Postgres quotes any
+ * element containing whitespace, a comma, a brace, a quote or a backslash, so an unquoted token is
+ * the element's text as is; a brace in one means a nested array, which is not read.
+ */
+function unquotedElementValue(token: string, elementType: string): JsonValue | undefined {
+  if (token === '' || token.includes('{') || token.includes('}')) return undefined;
+  if (BOOLEAN_ELEMENT_TYPE_PATTERN.test(elementType)) {
+    if (BOOLEAN_TRUE_TOKEN_PATTERN.test(token)) return true;
+    if (BOOLEAN_FALSE_TOKEN_PATTERN.test(token)) return false;
+    return undefined;
+  }
+  if (NUMBER_TYPE_PATTERN.test(elementType)) {
+    return NUMERIC_PATTERN.test(token) ? numberValue(token, elementType) : undefined;
+  }
+  if (isJsonElementType(elementType)) {
+    if (token === 'true') return true;
+    if (token === 'false') return false;
+    return NUMERIC_PATTERN.test(token) ? numberValue(token, elementType) : undefined;
+  }
+  return token;
+}
+
 /**
  * Parses a Postgres array literal body (`{...}`) into a JS array of primitives.
  * Returns undefined if the body cannot be reliably parsed.
  *
  * Handles:
  * - `{}` → `[]`
- * - `{elem1,elem2,...}` → `[elem1, elem2, ...]` with numeric and string element coercion
+ * - `{elem1,elem2,...}` → `[elem1, elem2, ...]`, each unquoted element read by the element type
  * - quoted elements that contain commas, doubled/escaped quotes, and the literal
  *   strings `NULL`/`true`/`false` (a quoted token is always a string)
  */
@@ -232,21 +259,9 @@ function parseArrayLiteralBody(
       result.push(null);
       continue;
     }
-    if (el === 'true') {
-      result.push(true);
-      continue;
-    }
-    if (el === 'false') {
-      result.push(false);
-      continue;
-    }
-    if (NUMERIC_PATTERN.test(el)) {
-      const value = numberValue(el, elementType);
-      if (value === undefined) return undefined;
-      result.push(value);
-      continue;
-    }
-    return undefined;
+    const value = unquotedElementValue(el, elementType);
+    if (value === undefined) return undefined;
+    result.push(value);
   }
   return result;
 }

@@ -37,14 +37,74 @@ describe('parsePostgresDefault array literals', () => {
     });
   });
 
-  it('fails closed for ambiguous bool tokens t/f (no literal-array normalization)', () => {
-    const result = parsePostgresDefault("'{t,f}'::boolean[]", 'boolean[]');
-    expect(result?.kind).not.toBe('literal');
+  it('reads the t/f tokens Postgres prints for a boolean element as booleans', () => {
+    expect(parsePostgresDefault("'{t,f}'::boolean[]", 'bool[]')).toEqual({
+      kind: 'literal',
+      value: [true, false],
+    });
   });
 
-  it('fails closed for an unquoted non-numeric element (no literal-array normalization)', () => {
-    const result = parsePostgresDefault("'{hello world}'::text[]", 'text[]');
-    expect(result?.kind).not.toBe('literal');
+  it('fails closed for an unquoted boolean element that is not t, f, true or false', () => {
+    expect(parsePostgresDefault("'{yes}'::boolean[]", 'bool[]')).toEqual({
+      kind: 'function',
+      expression: "'{yes}'::boolean[]",
+    });
+  });
+
+  it('reads unquoted text elements as strings', () => {
+    expect(parsePostgresDefault("'{a,b}'::text[]", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ['a', 'b'],
+    });
+  });
+
+  it('reads unquoted true, false and numerals in a text array as strings', () => {
+    expect(parsePostgresDefault("'{true,false,1}'::text[]", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ['true', 'false', '1'],
+    });
+  });
+
+  it('reads an unquoted enum member as a string', () => {
+    expect(parsePostgresDefault('\'{USER}\'::"Role"[]', '"Role"[]')).toEqual({
+      kind: 'literal',
+      value: ['USER'],
+    });
+  });
+
+  it('reads an unquoted varchar element as a string', () => {
+    expect(parsePostgresDefault("'{x}'::character varying[]", 'character varying[]')).toEqual({
+      kind: 'literal',
+      value: ['x'],
+    });
+  });
+
+  it('reads an unquoted date element as its text', () => {
+    expect(parsePostgresDefault("'{2024-01-01}'::date[]", 'date[]')).toEqual({
+      kind: 'literal',
+      value: ['2024-01-01'],
+    });
+  });
+
+  it('fails closed for a non-numeral in a number array', () => {
+    expect(parsePostgresDefault("'{1,a}'::integer[]", 'int4[]')).toEqual({
+      kind: 'function',
+      expression: "'{1,a}'::integer[]",
+    });
+  });
+
+  it('fails closed for an unquoted non-numeric json element', () => {
+    expect(parsePostgresDefault("'{a}'::jsonb[]", 'jsonb[]')).toEqual({
+      kind: 'function',
+      expression: "'{a}'::jsonb[]",
+    });
+  });
+
+  it('fails closed for a multidimensional array body', () => {
+    expect(parsePostgresDefault("'{{a,b},{c,d}}'::text[]", 'text[]')).toEqual({
+      kind: 'function',
+      expression: "'{{a,b},{c,d}}'::text[]",
+    });
   });
 
   it('keeps a comma inside a quoted element as part of that element', () => {
@@ -392,6 +452,14 @@ describe('postgresResolveDefault', () => {
       'text[]',
     );
     expect(result).toEqual({ kind: 'literal', value: [] });
+  });
+
+  it('resolves a raw text[] default with unquoted elements to the literal introspection produces', () => {
+    const expression = "'{a,b}'::text[]";
+    expect(postgresResolveDefault({ kind: 'function', expression }, 'text[]')).toEqual({
+      kind: 'literal',
+      value: ['a', 'b'],
+    });
   });
 
   it('normalizes a raw nextval(...) default to autoincrement(), matching a serial/identity column', () => {
