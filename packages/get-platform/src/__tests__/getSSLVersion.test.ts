@@ -18,6 +18,13 @@ describeIf(process.platform === 'linux')('computeLibSSLSpecificPaths', () => {
     computeLibSSLSpecificPaths({ familyDistro: 'debian', arch, archFromUname })
   })
 
+  it('returns alpine paths for alpine family', () => {
+    expect(computeLibSSLSpecificPaths({ familyDistro: 'alpine', arch: 'x64', archFromUname: 'x86_64' })).toEqual([
+      '/lib',
+      '/usr/lib',
+    ])
+  })
+
   it('reads nix-ld library path on nixos', () => {
     vi.stubEnv('NIX_LD_LIBRARY_PATH', '/run/current-system/sw/share/nix-ld/lib:/nix/store/abc-openssl-3.0.x/lib')
     vi.stubEnv('LD_LIBRARY_PATH', '')

@@ -298,7 +298,7 @@ type ComputeLibSSLSpecificPathsParams = {
 
 export function computeLibSSLSpecificPaths(args: ComputeLibSSLSpecificPathsParams) {
   return match(args)
-    .with({ familyDistro: 'musl' }, () => {
+    .with({ familyDistro: 'alpine' }, () => {
       /* Linux Alpine */
       debug('Trying platform-specific paths for "alpine"')
       return ['/lib', '/usr/lib']
