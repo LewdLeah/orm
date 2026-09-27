@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { OpaqueContractSourceProvider, PrismaNextConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import type {
   ExpectationFailureReason,
@@ -22,6 +22,7 @@ import {
   errorUnexpected,
 } from '../../utils/cli-errors';
 import { sanitizeErrorMessage } from '../../utils/command-helpers';
+import { chooseAction, runCommandAction } from '../../utils/next-actions';
 import { contractPathFor, displayPath } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 
@@ -287,4 +288,57 @@ export function schemaVerdictDiagnostic(inputs: {
       ...(dotted || code === undefined ? {} : { code }),
     },
   };
+}
+
+const OWNING_PRISMA_VERSIONS: ReadonlyMap<string, string> = new Map([
+  ['prisma6', 'Prisma 6'],
+  ['prisma7', 'Prisma 7'],
+]);
+
+/**
+ * What to do when the database does not satisfy the contract. A Prisma 6 or 7
+ * source means that application still owns the database, so changing its
+ * schema comes before changing the database.
+ */
+export function schemaDriftNextActions(inputs: {
+  readonly source: Pick<OpaqueContractSourceProvider, 'format' | 'inputs'> | undefined;
+  readonly verb: 'sign' | 'verify';
+  readonly cwd: string;
+}): readonly NextAction[] {
+  const { source, verb } = inputs;
+  const owner =
+    source?.format === undefined ? undefined : OWNING_PRISMA_VERSIONS.get(source.format);
+  if (owner !== undefined) {
+    const schemaInput = source?.inputs?.[0];
+    const schemaPath =
+      schemaInput === undefined ? 'your schema.prisma' : displayPath(schemaInput, inputs.cwd);
+    return [
+      chooseAction(
+        `Change ${schemaPath} to describe the database as it is (${owner} owns this database), re-run contract emit, then ${verb} again`,
+      ),
+      runCommandAction(
+        `Or change the database to match the contract, then ${verb} again`,
+        '{bin} db update',
+      ),
+    ];
+  }
+  const updateDatabase = runCommandAction(
+    `Change the database to match the contract, then ${verb} again`,
+    '{bin} db update',
+  );
+  if (source?.format === 'psl') {
+    return [
+      updateDatabase,
+      runCommandAction(
+        `Or change the contract to describe the database as it is, then re-emit and ${verb} again`,
+        '{bin} contract infer',
+      ),
+    ];
+  }
+  return [
+    updateDatabase,
+    chooseAction(
+      `Or change the contract to describe the database as it is, re-run contract emit, then ${verb} again`,
+    ),
+  ];
 }
