@@ -159,9 +159,7 @@ export const mongoBsonCodec = mongoCodec({
   encode: (value: unknown) => encodeBsonValue(value),
   encodeJson: (value: unknown) =>
     blindCast<JsonValue, 'canonical Extended JSON is plain JSON'>(
-      EJSON.serialize(blindCast<Document, 'EJSON serializes any BSON value'>(value), {
-        relaxed: false,
-      }),
+      EJSON.serialize(value, { relaxed: false }),
     ),
   decodeJson: (json) =>
     EJSON.deserialize(blindCast<Document, 'canonical Extended JSON is a document'>(json), {
