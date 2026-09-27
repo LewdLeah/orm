@@ -137,9 +137,44 @@ function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
   >(value);
 }
 
+interface ColumnDefaultSite {
+  readonly modelName: string;
+  readonly fieldName: string;
+  readonly codecId: string;
+}
+
+function encodeDefaultValue(
+  value: unknown,
+  codec: Codec | undefined,
+  site: ColumnDefaultSite,
+  elementNumber?: number,
+): JsonValue {
+  try {
+    return encodeViaCodec(value, codec);
+  } catch (cause) {
+    const subject = elementNumber === undefined ? 'default' : `default (element ${elementNumber})`;
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    throw contractError(
+      'CONTRACT.DEFAULT_INVALID',
+      `Field "${site.modelName}.${site.fieldName}" has a ${subject} that its codec "${site.codecId}" refuses: ${reason}`,
+      {
+        cause,
+        meta: {
+          modelName: site.modelName,
+          fieldName: site.fieldName,
+          codecId: site.codecId,
+          reason: 'codec-refused-default',
+          ...ifDefined('element', elementNumber),
+        },
+      },
+    );
+  }
+}
+
 function encodeColumnDefault(
   defaultInput: AuthoredColumnDefault,
   codec: Codec | undefined,
+  site: ColumnDefaultSite,
   many = false,
 ): ColumnDefault {
   if (defaultInput.kind === 'function') {
@@ -163,12 +198,14 @@ function encodeColumnDefault(
     }
     return {
       kind: 'literal',
-      value: defaultInput.value.map((element) => encodeViaCodec(element, codec)),
+      value: defaultInput.value.map((element, index) =>
+        encodeDefaultValue(element, codec, site, index + 1),
+      ),
     };
   }
   return {
     kind: 'literal',
-    value: encodeViaCodec(defaultInput.value, codec),
+    value: encodeDefaultValue(defaultInput.value, codec, site),
   };
 }
 
@@ -710,12 +747,17 @@ function targetColumnsForJunction(targetModel: ModelNode, fieldName: string): re
 function buildStorageColumn(
   field: FieldNode | ValueObjectFieldNode,
   storageValueSetRef: ValueSetRef | undefined,
+  modelName: string,
   codecLookup?: CodecLookup,
 ): StorageColumn {
   if (isValueObjectField(field)) {
     const encodedDefault =
       field.default !== undefined
-        ? encodeColumnDefault(field.default, codecLookup?.get(JSONB_CODEC_ID))
+        ? encodeColumnDefault(field.default, codecLookup?.get(JSONB_CODEC_ID), {
+            modelName,
+            fieldName: field.fieldName,
+            codecId: JSONB_CODEC_ID,
+          })
         : undefined;
 
     return {
@@ -732,6 +774,7 @@ function buildStorageColumn(
       ? encodeColumnDefault(
           field.default,
           columnCodec(codecId, field.descriptor.typeParams, codecLookup),
+          { modelName, fieldName: field.fieldName, codecId },
           field.many === true,
         )
       : undefined;
@@ -1127,7 +1170,12 @@ export function buildSqlContractFromDefinition(
           : withoutNoCheck;
       }
 
-      const column = buildStorageColumn(resolvedField, storageValueSetRef, codecLookup);
+      const column = buildStorageColumn(
+        resolvedField,
+        storageValueSetRef,
+        semanticModel.modelName,
+        codecLookup,
+      );
       columns[field.columnName] = column;
       fieldToColumn[field.fieldName] = field.columnName;
 

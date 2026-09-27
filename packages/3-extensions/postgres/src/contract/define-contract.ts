@@ -1,4 +1,6 @@
+import postgresAdapter, { assemblePostgresCodecRegistry } from '@internal/adapter-postgres/control';
 import sqlFamilyPack from '@internal/family-sql/pack';
+import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ExtensionPackRef } from '@internal/framework-components/components';
 import type {
   SqlNamespaceBase,
@@ -79,6 +81,13 @@ type PostgresScaffold<
   readonly enums?: Enums;
 };
 
+function createPostgresCodecLookup(
+  extensions: Record<string, ExtensionPackRef<'sql', string>> | undefined,
+): CodecLookup {
+  const extensionPacks = Object.values(extensions ?? {});
+  return assemblePostgresCodecRegistry([postgresAdapter, ...extensionPacks]);
+}
+
 export function defineContract<
   const Types extends TypesConstraint = Record<never, never>,
   const Models extends ModelsConstraint = Record<never, never>,
@@ -114,7 +123,11 @@ export function defineContract(
     readonly enums?: EnumsConstraint;
   },
 ): PostgresResult<TypesConstraint, ModelsConstraint, undefined, EnumsConstraint> {
-  const bound = { ...definition, createNamespace: postgresCreateNamespace };
+  const bound = {
+    ...definition,
+    createNamespace: postgresCreateNamespace,
+    codecLookup: definition.codecLookup ?? createPostgresCodecLookup(definition.extensions),
+  };
   if (factory !== undefined) {
     return buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
   }
