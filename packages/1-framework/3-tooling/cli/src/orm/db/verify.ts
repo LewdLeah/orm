@@ -324,6 +324,7 @@ function driftDiagnostics(inputs: {
   readonly perSpace: ReadonlyMap<string, CombinedVerifyResult['result']>;
   readonly combined: CombinedVerifyResult;
   readonly source: ContractSourceProvider | undefined;
+  readonly appSpaceId: string;
   readonly cwd: string;
 }): readonly Diagnostic[] {
   const perSpace = [...inputs.perSpace]
@@ -333,7 +334,7 @@ function driftDiagnostics(inputs: {
         result,
         space,
         nextActions: schemaDriftNextActions({
-          source: inputs.source,
+          source: space === inputs.appSpaceId ? inputs.source : undefined,
           verb: 'verify',
           cwd: inputs.cwd,
         }),
@@ -485,6 +486,7 @@ export function createDbVerifyCommand(
                       perSpace: aggregate.value.schemaResults,
                       combined,
                       source: ctx.config.contract?.source,
+                      appSpaceId: aggregate.value.appSpaceId,
                       cwd: ctx.cwd,
                     }),
               },
@@ -580,6 +582,7 @@ export function createDbVerifyCommand(
                         perSpace: aggregate.value.schemaResults,
                         combined: driftCombined,
                         source: ctx.config.contract?.source,
+                        appSpaceId: aggregate.value.appSpaceId,
                         cwd: ctx.cwd,
                       })
                     : []),
@@ -627,6 +630,7 @@ export function createDbVerifyCommand(
                   perSpace: aggregate.value.schemaResults,
                   combined,
                   source: ctx.config.contract?.source,
+                  appSpaceId: aggregate.value.appSpaceId,
                   cwd: ctx.cwd,
                 }),
               },

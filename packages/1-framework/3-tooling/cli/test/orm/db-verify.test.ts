@@ -490,7 +490,7 @@ describe('db verify', () => {
       ]);
     });
 
-    it('asks a Prisma 7 project to change its schema before the database', async () => {
+    it('asks a Prisma 7 project to change its schema first if Prisma 7 still manages the database', async () => {
       const dir = await projectDir();
       mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', DRIFTED]] }));
       const config = ormConfig({
@@ -506,13 +506,49 @@ describe('db verify', () => {
         {
           kind: 'user-choice',
           label:
-            'Change prisma/schema.prisma to describe the database as it is (Prisma 7 owns this database), re-run contract emit, then verify again',
+            'If Prisma 7 still manages this database, change prisma/schema.prisma to describe it as it is, re-run contract emit, then verify again',
         },
         {
           kind: 'run-command',
-          label: 'Or change the database to match the contract, then verify again',
+          label:
+            'Or, if Prisma 8 manages it, change the database to match the contract, then verify again',
           command: '{bin} db update',
         },
+      ]);
+    });
+
+    it('gives drift in an extension space the source-neutral next actions', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(
+        aggregateOk({
+          perSpace: [
+            ['app', schemaResult()],
+            ['pgvector', DRIFTED],
+          ],
+        }),
+      );
+      const config = ormConfig({
+        contract: {
+          source: { format: 'prisma7', inputs: ['prisma/schema.prisma'], load: async () => ({}) },
+          output: 'output/contract.json',
+        },
+      });
+
+      const run = await harness(config).run(['db', 'verify', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run).map((entry) => entry.nextActions)).toEqual([
+        [
+          {
+            kind: 'run-command',
+            label: 'Change the database to match the contract, then verify again',
+            command: '{bin} db update',
+          },
+          {
+            kind: 'user-choice',
+            label:
+              'Or change the contract to describe the database as it is, re-run contract emit, then verify again',
+          },
+        ],
       ]);
     });
 
