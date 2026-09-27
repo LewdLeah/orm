@@ -1,4 +1,3 @@
-import { assembleSqliteCodecRegistry } from '@internal/adapter-sqlite/codec-lookup';
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
@@ -13,6 +12,7 @@ import type {
   ModelLike,
 } from '@internal/sql-contract-ts/contract-builder';
 import { buildBoundContract } from '@internal/sql-contract-ts/contract-builder';
+import { assembleSqliteCodecRegistry } from '@internal/target-sqlite/codecs';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
 

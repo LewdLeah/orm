@@ -1,4 +1,11 @@
 export type { PgInterval } from '../core/codec-helpers';
+export {
+  assemblePostgresCodecRegistry,
+  assemblePostgresCodecRegistryWithBuiltins,
+  createPostgresBuiltinCodecLookup,
+  createPostgresCodecRegistryWithBuiltins,
+  type PostgresCodecRegistry,
+} from '../core/codec-lookup';
 export type {
   PgBitDescriptor,
   PgBoolDescriptor,

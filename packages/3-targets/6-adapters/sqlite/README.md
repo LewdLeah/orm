@@ -187,6 +187,5 @@ DELETE FROM "user" WHERE "user"."id" = ? RETURNING "user"."id", "user"."email"
 - `./codec-types`: SQLite codec types (`CodecTypes`, `JsonValue`)
 - `./column-types`: Column type descriptors (`textColumn`, `integerColumn`, `realColumn`, `blobColumn`, `datetimeColumn`, `jsonColumn`, `bigintColumn`)
 - `./types`: SQLite-specific types
-- `./codec-lookup`: Codec registry builders, for callers that need the codecs without loading the control adapter
 - `./control`: Control-plane entry point (stubbed for future migration support)
 - `./runtime`: Runtime-plane entry point (runtime adapter descriptor)

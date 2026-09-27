@@ -1,4 +1,3 @@
-import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/adapter-postgres/codec-lookup';
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ExtensionPackRef } from '@internal/framework-components/components';
@@ -15,6 +14,7 @@ import type {
   ModelLike,
 } from '@internal/sql-contract-ts/contract-builder';
 import { buildBoundContract } from '@internal/sql-contract-ts/contract-builder';
+import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import type { RlsEntityHandle } from './rls';

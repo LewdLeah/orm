@@ -317,6 +317,5 @@ table('event', (t) =>
 - `./codec-types`: PostgreSQL codec types (`CodecTypes`, `JsonValue`)
 - `./column-types`: Column type descriptors and authoring helpers (`jsonColumn`, `jsonbColumn`, `enumType`, `enumColumn`, `textColumn`, `int4Column`, etc.)
 - `./types`: PostgreSQL-specific types
-- `./codec-lookup`: Codec registry builders, for callers that need the codecs without loading the control adapter
 - `./control`: Control-plane entry point (adapter descriptor)
 - `./runtime`: Runtime-plane entry point (runtime adapter descriptor)

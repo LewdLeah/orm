@@ -43,12 +43,14 @@ import type {
 import { isDdlNode } from '@internal/sql-relational-core/ast';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { SqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codec-descriptor';
-import { jsonDocumentRetag } from '@internal/target-sqlite/codecs';
+import {
+  createSqliteCodecRegistryWithBuiltins,
+  jsonDocumentRetag,
+} from '@internal/target-sqlite/codecs';
 import type { SqliteDdlNode } from '@internal/target-sqlite/ddl';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-sqlite/sql-utils';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
-import { createSqliteCodecRegistryWithBuiltins } from './codec-lookup';
 import { SqliteControlAdapter } from './control-adapter';
 import type {
   SqliteAdapterOptions,
