@@ -150,8 +150,40 @@ describe('db sign', () => {
       expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
         {
           kind: 'run-command',
-          label: 'Bring the database up to the contract, then sign again',
+          label: 'Change the database to match the contract, then sign again',
           command: '{bin} db update',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract to describe the database as it is, re-run contract emit, then sign again',
+        },
+      ]);
+    });
+
+    it('offers contract infer as the contract-side action for a PSL source', async () => {
+      const dir = await projectDir();
+      mocks.schemaVerify.mockResolvedValue(DRIFTED);
+      const config = ormConfig({
+        contract: {
+          source: { format: 'psl', inputs: ['contract.prisma'], load: async () => ({}) },
+          output: 'output/contract.json',
+        },
+      });
+
+      const run = await harness(config).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+        {
+          kind: 'run-command',
+          label: 'Change the database to match the contract, then sign again',
+          command: '{bin} db update',
+        },
+        {
+          kind: 'run-command',
+          label:
+            'Or change the contract to describe the database as it is, then re-emit and sign again',
+          command: '{bin} contract infer',
         },
       ]);
     });

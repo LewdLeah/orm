@@ -470,6 +470,52 @@ describe('db verify', () => {
       ]);
     });
 
+    it('offers to change the database, or the contract, for a TypeScript source', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', DRIFTED]] }));
+
+      const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+        {
+          kind: 'run-command',
+          label: 'Change the database to match the contract, then verify again',
+          command: '{bin} db update',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract to describe the database as it is, re-run contract emit, then verify again',
+        },
+      ]);
+    });
+
+    it('asks a Prisma 7 project to change its schema before the database', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', DRIFTED]] }));
+      const config = ormConfig({
+        contract: {
+          source: { format: 'prisma7', inputs: ['prisma/schema.prisma'], load: async () => ({}) },
+          output: 'output/contract.json',
+        },
+      });
+
+      const run = await harness(config).run(['db', 'verify', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+        {
+          kind: 'user-choice',
+          label:
+            'Change prisma/schema.prisma to describe the database as it is (Prisma 7 owns this database), re-run contract emit, then verify again',
+        },
+        {
+          kind: 'run-command',
+          label: 'Or change the database to match the contract, then verify again',
+          command: '{bin} db update',
+        },
+      ]);
+    });
+
     it('draws the drift as a tree the engine paints', async () => {
       const dir = await projectDir();
       mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', DRIFTED]] }));

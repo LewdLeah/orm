@@ -1,3 +1,4 @@
+import type { ContractSourceProvider } from '@internal/config/config-types';
 import { ormConfigSection } from '@internal/config-loader';
 import type { VerifyDatabaseResult } from '@internal/framework-components/control';
 import {
@@ -9,7 +10,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
-import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
+import type { Diagnostic, Result } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
 import type { DbVerifyMode } from '../../control-api/types';
@@ -25,7 +26,6 @@ import {
 } from '../../utils/combine-verify-results';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import type { DbVerifyReport } from '../../utils/formatters/verify';
-import { runCommandAction } from '../../utils/next-actions';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { migrationsDirFor } from '../migration/paths';
@@ -34,6 +34,7 @@ import { controlProgressReporter } from '../progress';
 import {
   readEmittedContract,
   requireVerifyConnection,
+  schemaDriftNextActions,
   schemaFindingBlocks,
   schemaVerdictDiagnostic,
   verificationThrow,
@@ -58,12 +59,6 @@ type DbVerifyDocument = DbVerifyReport & {
 /** The schema-verify document `--schema-only` and the drift branch report. */
 type SchemaVerifyDocument = CombinedVerifyResult['result'] & {
   readonly unclaimed: readonly string[];
-};
-
-const PUSH_THE_CONTRACT = runCommandAction('Push the contract to the database', '{bin} db update');
-const RECONCILE_BY_HAND: NextAction = {
-  kind: 'user-choice',
-  label: 'Or reconcile the differences by hand and verify again',
 };
 
 function errorInvalidVerifyMode(options: {
@@ -328,6 +323,8 @@ function schemaPresentations(inputs: {
 function driftDiagnostics(inputs: {
   readonly perSpace: ReadonlyMap<string, CombinedVerifyResult['result']>;
   readonly combined: CombinedVerifyResult;
+  readonly source: ContractSourceProvider | undefined;
+  readonly cwd: string;
 }): readonly Diagnostic[] {
   const perSpace = [...inputs.perSpace]
     .filter(([, result]) => !result.ok)
@@ -335,7 +332,11 @@ function driftDiagnostics(inputs: {
       schemaVerdictDiagnostic({
         result,
         space,
-        nextActions: [PUSH_THE_CONTRACT, RECONCILE_BY_HAND],
+        nextActions: schemaDriftNextActions({
+          source: inputs.source,
+          verb: 'verify',
+          cwd: inputs.cwd,
+        }),
       }),
     );
   if (perSpace.length > 0) {
@@ -480,7 +481,12 @@ export function createDbVerifyCommand(
                 exitCode: combined.result.ok ? 0 : FINDINGS_EXIT_CODE,
                 diagnostics: combined.result.ok
                   ? []
-                  : driftDiagnostics({ perSpace: aggregate.value.schemaResults, combined }),
+                  : driftDiagnostics({
+                      perSpace: aggregate.value.schemaResults,
+                      combined,
+                      source: ctx.config.contract?.source,
+                      cwd: ctx.cwd,
+                    }),
               },
               schemaPresentations({ document, header, strict }),
             ),
@@ -573,6 +579,8 @@ export function createDbVerifyCommand(
                     ? driftDiagnostics({
                         perSpace: aggregate.value.schemaResults,
                         combined: driftCombined,
+                        source: ctx.config.contract?.source,
+                        cwd: ctx.cwd,
                       })
                     : []),
                 ],
@@ -618,6 +626,8 @@ export function createDbVerifyCommand(
                 diagnostics: driftDiagnostics({
                   perSpace: aggregate.value.schemaResults,
                   combined,
+                  source: ctx.config.contract?.source,
+                  cwd: ctx.cwd,
                 }),
               },
               schemaPresentations({ document, header, strict }),
