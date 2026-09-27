@@ -112,7 +112,7 @@ import {
   mergeAnnotations,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
-import { authoredIndexName, type ScopesOfIndexes } from './scopes';
+import { authoredIndexName, type ScopeNamesOfIndexes, type ScopesOfIndexes } from './scopes';
 import type { ModelTableIndexes } from './types';
 import {
   type AggregateBuilder,
@@ -326,6 +326,10 @@ class CollectionImpl<
       }
     }
     Object.defineProperty(this, 'scopes', { value: scopes, enumerable: false });
+    for (const [name, operations] of Object.entries(scopes)) {
+      if (name in this) continue;
+      Object.defineProperty(this, name, { value: operations, enumerable: false });
+    }
   }
 
   #applyScopeRefinement(refinement: CollectionScopeRefinement): unknown {
@@ -2910,17 +2914,26 @@ export type Collection<
   Row = SimplifyDeep<InferRootRow<TContract, ModelName>>,
   State extends CollectionTypeState = DefaultCollectionTypeState,
 > = CollectionImpl<TContract, ModelName, Row, State> &
-  AggregateIncludeReducers<TContract, ModelName, State['nsId']> &
-  CollectionScopesMember<TContract, ModelName, Row, State>;
+  AggregateIncludeReducers<TContract, ModelName, State['nsId']> & {
+    readonly scopes: CollectionScopes<TContract, ModelName, Row, State>;
+  } & {
+    readonly [K in Exclude<
+      ScopeNamesOfIndexes<ModelTableIndexes<TContract, ModelName, State['nsId']>>,
+      ReservedCollectionMemberName
+    >]: CollectionScopes<TContract, ModelName, Row, State>[K];
+  };
 
-export interface CollectionScopesMember<
-  TContract extends Contract<SqlStorage>,
-  ModelName extends string,
-  Row,
-  State extends CollectionTypeState,
-> {
-  readonly scopes: CollectionScopes<TContract, ModelName, Row, State>;
-}
+/**
+ * Names a scope is never placed under directly. Computed once from the collection class with fixed type arguments, plus the aggregate operations every SQL target declares.
+ */
+export type ReservedCollectionMemberName =
+  | 'scopes'
+  | 'count'
+  | 'sum'
+  | 'avg'
+  | 'min'
+  | 'max'
+  | keyof CollectionImpl<Contract<SqlStorage>, string, unknown, DefaultCollectionTypeState>;
 
 export type CollectionScopes<
   TContract extends Contract<SqlStorage>,

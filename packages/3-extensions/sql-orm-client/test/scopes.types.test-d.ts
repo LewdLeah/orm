@@ -104,6 +104,7 @@ test('a model with no such index has an empty scopes object', () => {
 });
 
 class PostCollection extends Collection<ScopedContract, 'Post'> {
+  // @ts-expect-error a scope of the same name is placed directly on the base collection type
   published() {
     return this.where((post) => post.views.gte(100));
   }

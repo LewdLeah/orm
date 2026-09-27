@@ -25,6 +25,7 @@ function scopedContract(): ScopedContract {
 }
 
 class PostCollection extends Collection<ScopedContract, 'Post'> {
+  // @ts-expect-error a scope of the same name is placed directly on the base collection type
   published() {
     return this.where((post) => post.views.gte(100));
   }
