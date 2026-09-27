@@ -196,7 +196,9 @@ type EnumHandleOf<State> = State extends { readonly typeRef?: infer TypeRef }
 
 type DefaultArgumentOf<State> = [EnumHandleOf<State>] extends [never]
   ? DefaultLiteralOf<State> | ColumnDefault
-  : EnumHandleOf<State>['values'][number];
+  : State extends { readonly many?: true }
+    ? readonly EnumHandleOf<State>['values'][number][]
+    : EnumHandleOf<State>['values'][number];
 
 function toColumnDefault(value: unknown): AuthoredColumnDefault {
   if (isColumnDefault(value)) {

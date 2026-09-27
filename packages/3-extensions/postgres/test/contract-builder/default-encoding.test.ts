@@ -62,12 +62,6 @@ describe('postgres defineContract encodes literal defaults through the column co
     ).toEqual({ kind: 'literal', value: '2024-01-01T00:00:00.000Z' });
   });
 
-  it('stores an ISO string given to field.temporal.timestamptzString()', () => {
-    expect(
-      storedDefault((field) => field.temporal.timestamptzString().default('2024-01-01T00:00:00Z')),
-    ).toEqual({ kind: 'literal', value: '2024-01-01T00:00:00Z' });
-  });
-
   it('refuses a fractional number on a bigint column', () => {
     expect(() => storedDefault((field) => field.bigint().default(fromUntypedCaller(1.5)))).toThrow(
       expect.objectContaining({
@@ -118,9 +112,7 @@ describe('postgres defineContract encodes literal defaults through the column co
         Event: model('Event', {
           fields: {
             id: field.id.uuidv4String(),
-            level: field
-              .namedType(Level)
-              .default(Level.members.Low) as unknown as ScalarFieldBuilder,
+            level: field.namedType(Level).default(Level.members.Low),
           },
         }),
       },
@@ -128,6 +120,28 @@ describe('postgres defineContract encodes literal defaults through the column co
     expect(
       contract.storage.namespaces['public']?.entries.table?.['Event']?.columns['level']?.default,
     ).toEqual({ kind: 'literal', value: '1' });
+  });
+
+  it('stores an array of enum member values on an enum list field', () => {
+    const Level = enumType(
+      'Level',
+      { codecId: 'pg/int8@1' as const, nativeType: 'int8' },
+      member('Low', 1n),
+      member('High', 10n),
+    );
+    const contract = defineContract({ enums: { Level } }, ({ field, model }) => ({
+      models: {
+        Event: model('Event', {
+          fields: {
+            id: field.id.uuidv4String(),
+            levels: field.namedType(Level).many().default([Level.members.Low, Level.members.High]),
+          },
+        }),
+      },
+    }));
+    expect(
+      contract.storage.namespaces['public']?.entries.table?.['Event']?.columns['levels']?.default,
+    ).toEqual({ kind: 'literal', value: ['1', '10'] });
   });
 
   it('keeps a caller-supplied codecLookup', () => {

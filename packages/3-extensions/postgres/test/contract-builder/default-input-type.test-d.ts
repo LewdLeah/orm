@@ -1,4 +1,9 @@
-import { int8Column, textColumn } from '@internal/adapter-postgres/column-types';
+import {
+  int8Column,
+  textColumn,
+  timeTemporalColumn,
+  varcharColumn,
+} from '@internal/adapter-postgres/column-types';
 import { test } from 'vitest';
 import { defineContract, enumType, member, now, sql } from '../../src/exports/contract-builder';
 
@@ -43,6 +48,9 @@ test('.default() takes the input type of the field codec', () => {
             list: field.bigint().many().default([1n, 2n]),
             level: field.namedType(Level).default(Level.members.Low),
             bigLevel: field.namedType(BigLevel).default(BigLevel.members.Low),
+            levels: field.namedType(Level).many().default([Level.members.Low, Level.members.High]),
+            varchar: field.column(varcharColumn(3)).default('abc'),
+            time: field.column(timeTemporalColumn()).default(Temporal.PlainTime.from('12:00')),
             column: field.column(int8Column).default(1n),
             namedType: field.namedType(types.Counter).default(1n),
             handWritten: field.column(handWritten).default('anything JSON'),
@@ -59,6 +67,14 @@ test('.default() takes the input type of the field codec', () => {
             list: field.bigint().many().default(1n),
             // @ts-expect-error an enum field takes one of its member values
             level: field.namedType(Level).default(2),
+            // @ts-expect-error an enum list field takes an array of member values
+            levels: field.namedType(Level).many().default(Level.members.Low),
+            // @ts-expect-error 2 is not a member value of Level
+            otherLevels: field.namedType(Level).many().default([2]),
+            // @ts-expect-error sql/varchar@1 takes a string, not a number
+            varchar: field.column(varcharColumn(3)).default(1),
+            // @ts-expect-error pg/time-temporal@1 takes a Temporal.PlainTime, not a string
+            time: field.column(timeTemporalColumn()).default('12:00'),
             // @ts-expect-error pg/text@1 takes a string, not a number
             column: field.column(textColumn).default(1),
             // @ts-expect-error pg/int8@1 takes a bigint, not a string

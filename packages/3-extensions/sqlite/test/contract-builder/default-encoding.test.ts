@@ -15,6 +15,10 @@ function storedDefault(build: (field: SqliteField) => ScalarFieldBuilder): unkno
   return namespace?.entries.table?.['Event']?.columns['at']?.default;
 }
 
+function fromUntypedCaller(value: unknown): never {
+  return value as never;
+}
+
 describe('sqlite defineContract encodes literal defaults through the column codec', () => {
   it('stores the ISO text of a Date given to field.temporal.datetime()', () => {
     expect(
@@ -24,7 +28,9 @@ describe('sqlite defineContract encodes literal defaults through the column code
 
   it('refuses a string given to field.temporal.datetime()', () => {
     expect(() =>
-      storedDefault((field) => field.temporal.datetime().default('2024-01-01T00:00:00Z' as never)),
+      storedDefault((field) =>
+        field.temporal.datetime().default(fromUntypedCaller('2024-01-01T00:00:00Z')),
+      ),
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
