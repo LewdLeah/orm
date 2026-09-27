@@ -6,7 +6,7 @@ changes:
       entry: one entry gives `bsonType: '<entry>'`, several give `bsonType: [...entries]`. A codec
       that declared more than one BSON type had only the first enforced; it now has all of them.
     detection:
-      glob: "packages/3-extensions/**"
+      glob: "**/*.{ts,mts,cts}"
       matches:
         - 'targetTypes\s*:\s*\[[^\]]*,'
 ---
