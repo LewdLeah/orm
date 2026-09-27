@@ -50,10 +50,10 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 |---|---|---|
 | 1 | `mongo-target-owns-codecs` | #30396, merged 2026-09-25 |
 | 2 | `execution-ref-neutral-names` | #30399, merged 2026-09-25 |
-| 3 | `mongo-execution-defaults` | #30403, stacked on 1 |
-| 5 | `mongo-prisma6-source` | #30405, stacked on 3 |
-| 4 | `mongo-generator-runtime-hoist` | #30406, stacked on 5 |
-| 6 | | not started; stacked on 4 |
+| 3 | `mongo-execution-defaults` | #30403, merged 2026-09-25 |
+| 5 | `mongo-prisma6-source` | #30405, merged 2026-09-27 |
+| 4 | `mongo-generator-runtime-hoist` | #30406, auto-merge armed, awaiting CI |
+| 6 | `mongo-json-bson` | in progress, stacked on 4 |
 
 ## Dependencies
 
@@ -94,3 +94,4 @@ The Mongo PSL renames `Int`→`Int32`, `Float`→`Double`, `Boolean`→`Bool`, `
 - `localeCompare` still orders other emitted or hashed output: `contract-psl/src/interpreter.ts` (~560), `contract-ts/src/contract-builder.ts` (~113), `packages/2-mongo-family/3-tooling/emitter/src/index.ts` (~65, ~78), `mongo-schema-ir/src/schema-ir.ts` (~17), `schema-verify/canonicalize-introspection.ts` (~141), and the framework `mergeCapabilityMatrices` key sort feeding `capabilities`. Each is host-locale dependent in the same way the execution sort was; sweep them in one change with the code-unit comparator.
 - The shared PSL parser reads only `a` or `a.b(` in index-field position, so a Prisma 6 `@@index([address.city])` fails with `PSL_INVALID_MODEL_MEMBER` before the Prisma 6 reader can report its own diagnostic; only the call form gets `PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED`. Teaching the parser dotted references touches every grammar, the formatter, and the language server.
 - Language-server completions now carry the deprecated Mongo scalar aliases last with the Deprecated tag; when the aliases are removed (a later release), delete the alias entries and the `deprecated` field consumers together.
+- `prisma contract print` (#30315) ships a Postgres printer only; a Mongo contract refuses with `CONTRACT.PRINT_UNSUPPORTED`. A Mongo printer is new work and must print the target-named scalars and the `temporal.*` presets; it belongs with the Prisma 6 migration story.
