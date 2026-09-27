@@ -55,10 +55,10 @@ db.Post.scopes.search.fulltext(q).limit(10).all();
 ## Place in the larger world
 
 - **ORM client (`sql-orm-client`).** Gains the `scopes` member, the interface contributions satisfy, class composition per model, and default-order handling.
-- **Postgres target.** Owns the full-text index kind: its authoring attribute, its structured representation, its DDL, and its scope operations. Reuses the existing full-text lowering and the `tsquery` helpers.
+- **Postgres target.** May reference the ORM client's interface type directly. Owns the full-text index kind: its authoring attribute, its structured representation, its DDL, and its scope operations. Reuses the existing full-text lowering and the `tsquery` helpers.
 - **Postgres facade.** Becomes generic over its extensions so contributions reach the client's types.
 - **Contract and emitter.** Carry the index as structured data. No ORM-specific types are emitted.
-- **Migrations.** A changed index representation changes storage hashes of contracts that declare a full-text index.
+- **Migrations.** A changed index representation changes storage hashes of contracts that declare a full-text index. The feature has no consumers yet, so no migration path from the opaque representation is provided.
 - **Mongo ORM client.** Out of scope for delivery, but the design must not rule it out; the ADR records the MongoDB constraints.
 
 ## Cross-cutting requirements
@@ -91,10 +91,8 @@ db.Post.scopes.search.fulltext(q).limit(10).all();
 ## Open questions
 
 1. **How the weighted index is authored.** The sketch uses a new attribute, `@@fullTextSearch(search, weights: [...])`. The alternative is widening the existing `@@fullTextIndex` to take a weighted field list. Both declare an index; the question is whether one attribute or two.
-2. **Whether the Postgres target may reference an ORM-defined type.** The layering configuration lists no layer order for the domain the ORM client, targets and extension packs share. `pnpm lint:deps` on a trial import settles it. If it is refused, the contribution lives in the Postgres facade, which already depends on the ORM client.
-3. **What happens to contracts that already declare `@@fullTextIndex`.** Storing the index as structured data changes the emitted contract and its storage hash while the database index is unchanged. The migration path must not drop and recreate the index.
-4. **Whether the type-level composition is tractable.** A model's collection type becomes the base plus each contribution applied to that model's index data. This needs a spike before the slices that depend on it are sized.
-5. **The TypeScript builder's form** of the weighted index, as the twin of the PSL attribute.
+2. **Whether the type-level composition is tractable.** A model's collection type becomes the base plus each contribution applied to that model's index data. This needs a spike before the slices that depend on it are sized.
+3. **The TypeScript builder's form** of the weighted index, as the twin of the PSL attribute.
 
 ## References
 
