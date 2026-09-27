@@ -399,19 +399,22 @@ The Mongo target package owns every built-in Mongo codec, as the Postgres target
 
 The source lives in `packages/3-mongo-target/1-mongo-target/src/core/{codec-ids,codecs,bson-scalar-helpers,data-types}.ts` and `src/exports/codec-types.ts`. The adapter's runtime descriptor registers `buildStandardCodecRegistry()`, and its control descriptor names each PSL scalar (`mongoScalarAuthoringTypes` in `packages/3-mongo-target/2-mongo-adapter/src/exports/control.ts`). The TypeScript builder in `@internal/mongo-contract-ts` keeps its own copy of the `CodecTypes` map; keep the two in step.
 
-| Codec id | PSL | TS builder | Application value | JSON form | BSON types (`targetTypes`) |
-| --- | --- | --- | --- | --- | --- |
-| `mongo/objectId@1` | `ObjectId` | `field.objectId()` | `string` (hex) | the same string | `objectId` |
-| `mongo/string@1` | `String` | `field.string()` | `string` | the same string | `string` |
-| `mongo/int32@1` | `Int32` | `field.int32()` | `number` | the same number | `int` |
-| `mongo/double@1` | `Double` | `field.double()` | `number` | the same number | `double` |
-| `mongo/bool@1` | `Bool` | `field.bool()` | `boolean` | the same boolean | `bool` |
-| `mongo/date@1` | `Date` | `field.date()` | `Date` | ISO-8601 text | `date` |
-| `mongo/vector@1` | — | `field.vector()` | `readonly number[]` | the same array | `vector` |
-| `mongo/int64@1` | `Int64` | `field.int64()` | `bigint` | decimal text; a safe-integer `number` is accepted on the way in | `long` |
-| `mongo/decimal128@1` | `Decimal128` | `field.decimal128()` | decimal text without an exponent | the same text | `decimal` |
-| `mongo/binary@1` | `Binary` | `field.binary()` | `Uint8Array` | unwrapped base64 | `binData` |
-| `mongo/json@1` | `Json` | `field.json()` | `JsonValue` | the same value | `object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null` |
+The PSL name, TS helper and application type of every Mongo scalar are listed in [Scalar types](scalar-types.md#mongodb). The table below adds what a codec author needs: each codec's JSON form and the BSON types its validator admits.
+
+| Codec id | Application value | JSON form | BSON types (`targetTypes`) |
+| --- | --- | --- | --- |
+| `mongo/objectId@1` | `string` (hex) | the same string | `objectId` |
+| `mongo/string@1` | `string` | the same string | `string` |
+| `mongo/int32@1` | `number` | the same number | `int` |
+| `mongo/double@1` | `number` | the same number | `double` |
+| `mongo/bool@1` | `boolean` | the same boolean | `bool` |
+| `mongo/date@1` | `Date` | ISO-8601 text | `date` |
+| `mongo/vector@1` | `readonly number[]` | the same array | `vector` |
+| `mongo/int64@1` | `bigint` | decimal text; a safe-integer `number` is accepted on the way in | `long` |
+| `mongo/decimal128@1` | decimal text without an exponent | the same text | `decimal` |
+| `mongo/binary@1` | `Uint8Array` | unwrapped base64 | `binData` |
+| `mongo/json@1` | `JsonValue` | the same value | `object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null` |
+| `mongo/bson@1` | `BsonValue` | canonical Extended JSON v2 (`EJSON.serialize(value, { relaxed: false })`) | none; the validator does not constrain it |
 
 `Json` (`mongo/json@1`) means a JSON value, no more. Encode accepts exactly a plain JSON value (plain objects, arrays without holes, strings, finite numbers, booleans, `null`) and refuses anything else at any depth with `RUNTIME.ENCODE_FAILED`, naming its path. Decode accepts a stored value whose every part is a BSON `object`, `array`, `string`, `double`, `int`, `bool`, `null`, or a `long` in the safe-integer range (returned as a `number`), and refuses anything else (a `Date`, `ObjectId`, `Decimal128`, `Binary`, regex, timestamp, a larger `long`, a non-finite double) with `RUNTIME.DECODE_FAILED`, naming its BSON type and path. The validator admits the same BSON types at the field's top level.
 
