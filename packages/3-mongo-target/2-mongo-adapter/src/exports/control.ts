@@ -25,11 +25,7 @@ export type { MongoControlDriverInstance };
 import { MongoControlAdapterImpl } from '../core/mongo-control-adapter';
 
 /**
- * The base PSL scalars as zero-arg type constructors in the unified authoring
- * channel, with explicit `nativeType` values pinned to the codec manifests
- * (`codecLookup.targetTypesFor(codecId)[0]`). `Json` has no BSON type; its
- * `nativeType` names the codec, and the validator reads the codec's empty
- * `targetTypes`, not this value.
+ * The base PSL scalars as zero-arg type constructors in the unified authoring channel. For a codec with one BSON type, `nativeType` is that type (`codecLookup.targetTypesFor(codecId)[0]`). `Json` (several BSON types) and `Bson` (none) have a `nativeType` that names the codec instead; the validator reads the codec's `targetTypes` list, not this value.
  */
 export const mongoScalarAuthoringTypes = {
   String: {
