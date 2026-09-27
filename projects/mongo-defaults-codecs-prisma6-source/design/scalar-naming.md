@@ -135,6 +135,19 @@ Everything in § 3.3 has a Postgres and SQLite counterpart, plus: the Prisma 7 r
 - **Traits:** none (unchanged). `renderValueLiteral`: none.
 - **Tests required:** encode refusal for each listed rejected kind, nested; decode refusal for each listed BSON kind with the path; a `long` at `2^53 - 1` decodes, at `2^53` refuses; validator derivation for a required, a nullable, and a list `Json` field; end to end: a document written by the raw driver with a `Date` inside a `Json` field fails decode with the path in the message; the slice 1 `bson-scalars` and `temporal-presets` journeys still pass.
 
+### 5.1 Decisions added during slice 6 (2026-09-27)
+
+Eight points § 5 left open, now fixed:
+
+1. **`<describe>` in the encode message** is the value's kind, chosen in this order: for an object carrying `_bsontype`, that tag (`ObjectId`, `Long`, `Decimal128`, `Binary`, `BSONRegExp`, `Timestamp`, `Int32`, `Double`); `Date`; `bigint`; `symbol`; `function`; `undefined`; for a non-finite number its literal (`NaN`, `Infinity`, `-Infinity`); for a sparse array hole `sparse array hole`; for any other object whose prototype is neither `Object.prototype`, `null`, nor `Array.prototype`, its constructor name (`Map`, `Set`, `RegExp`, `Uint8Array`, `Buffer`, or the class name). The encode message also carries the path: `mongo/json@1 value must be a JSON value; received <describe> at <path>`.
+2. **`<type>` in the decode message** is the BSON `$type` alias, the same vocabulary the validators use: `date`, `objectId`, `decimal`, `binData`, `regex`, `timestamp`, `long` (for a `long` outside the safe-integer range), `double` (for a non-finite double), `undefined`, `symbol`, `javascript`, `dbPointer`, `minKey`, `maxKey`.
+3. **Non-finite doubles on decode are refused** with the path (`… non-JSON BSON double at <path>`), because `NaN` and `±Infinity` are not JSON values; encode refuses them for the same reason.
+4. **Encode accepts exactly a plain JSON value.** Plain objects (prototype `Object.prototype` or `null`), arrays without holes, strings, finite numbers, booleans, `null`. Everything else is refused with its `<describe>` from point 1, at any depth.
+5. **`Int32` and `Double` wrapper objects on decode** (present only when the driver runs with `promoteValues: false`) are unwrapped to `number`; a `Double` wrapping a non-finite value is refused per point 3.
+6. **Path format** is dot notation with array indices as segments (`items.0.when`). At the root the message says `at the root` instead of an empty path.
+7. **Detection glob for the extension fragment entry** is `**/*.{ts,mts,cts}`, because an extension author's repository does not have this repository's layout.
+8. **Fragment directory** for this slice is `upgrade-instructions/pending/mongo-json-and-bson/` (the § 8 text below is amended accordingly); the earlier slice's fragment stays `mongo-target-owns-codecs`.
+
 ## 6. `Bson` on Mongo, exact specification
 
 A new scalar for "any BSON value", the only Mongo type whose validator does not constrain the value.
@@ -172,10 +185,10 @@ No value-level change. `pg/json@1`, `pg/jsonb@1`, and `sqlite/json@1` hold JSON 
 
 ## 8. Upgrade fragments
 
-Per `skills-contrib/record-upgrade-instructions/SKILL.md`. The Mongo change ships one `app` fragment and one `extension` fragment under `upgrade-instructions/pending/mongo-scalar-names/`.
+Per `skills-contrib/record-upgrade-instructions/SKILL.md`. The slice 1 renames ship in `upgrade-instructions/pending/mongo-target-owns-codecs/` (app change `mongo-psl-scalar-names`); the slice 6 changes ship in `upgrade-instructions/pending/mongo-json-and-bson/`.
 
 - **App, change `mongo-psl-scalar-names`:** detection glob `**/*.prisma`, pattern matching a field line whose type is one of the removed names: `^\s*[A-Za-z_][A-Za-z0-9_]*\s+(Int|Float|Boolean|DateTime)(\[\])?\??(\s|$)`. Instruction: a table `Int → Int32`, `Float → Double`, `Boolean → Bool`, `DateTime → Date`, applied to Mongo schemas only (the pattern also matches Postgres and SQLite schemas; the instruction says to apply it only in a schema whose config uses `@prisma/orm-mongo`), then re-emit; `contract.json` does not change. A second change `mongo-json-field-semantics`: no detection pattern (a `Json` field is not identifiable as non-JSON by grep); instruction: a `Json` field now admits only JSON values; documents holding `Date`, `ObjectId`, `Decimal128`, `Binary`, or 64-bit integers inside a `Json` field fail to decode; switch such fields to `Bson`, then re-emit and run `db update` so the validator changes.
-- **Extension, change `mongo-bson-codec-added`:** additive, `changes: []` is not enough because the validator derivation reads a `targetTypes` list now; entry describes that `targetTypes` may hold several BSON type names and that `targetTypes[0]` is no longer the only entry read. Detection: `targetTypes\s*:\s*\[[^\]]*,` in `packages/3-extensions/**` (an extension declaring more than one target type, which previously was ignored beyond the first).
+- **Extension, change `mongo-bson-codec-added`:** additive, `changes: []` is not enough because the validator derivation reads a `targetTypes` list now; entry describes that `targetTypes` may hold several BSON type names and that `targetTypes[0]` is no longer the only entry read. Detection: `targetTypes\s*:\s*\[[^\]]*,` in `**/*.{ts,mts,cts}` (an extension declaring more than one target type, which previously was ignored beyond the first).
 
 The Postgres/SQLite project ships its own fragments with the § 4 tables as rewrite instructions and the same field-line pattern per removed name.
 
