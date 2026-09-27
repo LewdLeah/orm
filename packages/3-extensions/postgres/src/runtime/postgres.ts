@@ -6,7 +6,12 @@ import { instantiateExecutionStack } from '@internal/framework-components/execut
 import { sql as sqlBuilder } from '@internal/sql-builder/runtime';
 import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
-import { orm as ormBuilder, type PreparedFrom, prepareQuery } from '@internal/sql-orm-client';
+import {
+  type AnyScopeContribution,
+  orm as ormBuilder,
+  type PreparedFrom,
+  prepareQuery,
+} from '@internal/sql-orm-client';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
 import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
@@ -43,19 +48,28 @@ import type { NamespacedNativeEnums } from './native-enums';
 import { PostgresRuntimeImpl } from './postgres-runtime';
 
 export type PostgresTargetId = 'postgres';
-type OrmClient<TContract extends Contract<SqlStorage>> = ReturnType<typeof ormBuilder<TContract>>;
+type NoScopes = readonly [];
+type OrmClient<
+  TContract extends Contract<SqlStorage>,
+  Scopes extends readonly AnyScopeContribution[] = NoScopes,
+> = ReturnType<typeof ormBuilder<TContract, Record<never, never>, Scopes>>;
 
-export interface PostgresTransactionContext<TContract extends Contract<SqlStorage>>
-  extends TransactionContext {
+export interface PostgresTransactionContext<
+  TContract extends Contract<SqlStorage>,
+  Scopes extends readonly AnyScopeContribution[] = NoScopes,
+> extends TransactionContext {
   readonly sql: Db<TContract>;
-  readonly orm: OrmClient<TContract>;
+  readonly orm: OrmClient<TContract, Scopes>;
   readonly enums: NamespacedEnums<TContract>;
   readonly nativeEnums: NamespacedNativeEnums<TContract>;
 }
 
-export interface PostgresClient<TContract extends Contract<SqlStorage>> {
+export interface PostgresClient<
+  TContract extends Contract<SqlStorage>,
+  Scopes extends readonly AnyScopeContribution[] = NoScopes,
+> {
   readonly sql: Db<TContract>;
-  readonly orm: OrmClient<TContract>;
+  readonly orm: OrmClient<TContract, Scopes>;
   readonly enums: NamespacedEnums<TContract>;
   readonly nativeEnums: NamespacedNativeEnums<TContract>;
   readonly raw: RawLane<TContract>;
@@ -64,7 +78,9 @@ export interface PostgresClient<TContract extends Contract<SqlStorage>> {
   readonly stack: SqlExecutionStackWithDriver<PostgresTargetId>;
   connect(bindingInput?: PostgresBindingInput): Promise<Runtime>;
   runtime(): Runtime;
-  transaction<R>(fn: (tx: PostgresTransactionContext<TContract>) => PromiseLike<R>): Promise<R>;
+  transaction<R>(
+    fn: (tx: PostgresTransactionContext<TContract, Scopes>) => PromiseLike<R>,
+  ): Promise<R>;
   prepare<
     D extends Declaration<CT>,
     Q extends SqlQueryPlan | Preparable<unknown, unknown>,
@@ -77,7 +93,8 @@ export interface PostgresClient<TContract extends Contract<SqlStorage>> {
   [Symbol.asyncDispose](): Promise<void>;
 }
 
-export interface PostgresOptionsBase {
+export interface PostgresOptionsBase<Scopes extends readonly AnyScopeContribution[] = NoScopes> {
+  readonly scopes?: Scopes;
   readonly extensions?: readonly SqlRuntimeExtensionDescriptor<PostgresTargetId>[];
   readonly middleware?: readonly SqlMiddleware[];
   readonly verifyMarker?: VerifyMarkerOption;
@@ -93,35 +110,42 @@ export interface PostgresBindingOptions {
   readonly pg?: Pool | Client;
 }
 
-export type PostgresOptionsWithContract<TContract extends Contract<SqlStorage>> =
-  PostgresBindingOptions &
-    PostgresOptionsBase & {
-      readonly contract: TContract;
-      readonly contractJson?: never;
-    };
+export type PostgresOptionsWithContract<
+  TContract extends Contract<SqlStorage>,
+  Scopes extends readonly AnyScopeContribution[] = NoScopes,
+> = PostgresBindingOptions &
+  PostgresOptionsBase<Scopes> & {
+    readonly contract: TContract;
+    readonly contractJson?: never;
+  };
 
-export type PostgresOptionsWithContractJson<TContract extends Contract<SqlStorage>> =
-  PostgresBindingOptions &
-    PostgresOptionsBase & {
-      readonly contractJson: unknown;
-      readonly contract?: never;
-      readonly _contract?: TContract;
-    };
+export type PostgresOptionsWithContractJson<
+  TContract extends Contract<SqlStorage>,
+  Scopes extends readonly AnyScopeContribution[] = NoScopes,
+> = PostgresBindingOptions &
+  PostgresOptionsBase<Scopes> & {
+    readonly contractJson: unknown;
+    readonly contract?: never;
+    readonly _contract?: TContract;
+  };
 
-export type PostgresOptions<TContract extends Contract<SqlStorage>> =
-  | PostgresOptionsWithContract<TContract>
-  | PostgresOptionsWithContractJson<TContract>;
+export type PostgresOptions<
+  TContract extends Contract<SqlStorage>,
+  Scopes extends readonly AnyScopeContribution[] = NoScopes,
+> =
+  | PostgresOptionsWithContract<TContract, Scopes>
+  | PostgresOptionsWithContractJson<TContract, Scopes>;
 
 function hasContractJson<TContract extends Contract<SqlStorage>>(
-  options: PostgresOptions<TContract>,
-): options is PostgresOptionsWithContractJson<TContract> {
+  options: PostgresOptions<TContract, readonly AnyScopeContribution[]>,
+): options is PostgresOptionsWithContractJson<TContract, readonly AnyScopeContribution[]> {
   return 'contractJson' in options;
 }
 
 const contractSerializer = new PostgresContractSerializer();
 
 function resolveContract<TContract extends Contract<SqlStorage>>(
-  options: PostgresOptions<TContract>,
+  options: PostgresOptions<TContract, readonly AnyScopeContribution[]>,
 ): TContract {
   const contractJson = hasContractJson(options)
     ? options.contractJson
@@ -134,7 +158,7 @@ function resolveContract<TContract extends Contract<SqlStorage>>(
 
 function toRuntimeBinding<TContract extends Contract<SqlStorage>>(
   binding: PostgresBinding,
-  options: PostgresOptions<TContract>,
+  options: PostgresOptions<TContract, readonly AnyScopeContribution[]>,
 ) {
   if (binding.kind !== 'url') {
     return binding;
@@ -159,15 +183,18 @@ function toRuntimeBinding<TContract extends Contract<SqlStorage>>(
  * - No-emit: pass a TypeScript-authored contract. Example: postgres({ contract })
  * - Emitted: pass Contract type explicitly. Example: postgres<Contract>({ contractJson, url })
  */
-export default function postgres<TContract extends Contract<SqlStorage>>(
-  options: PostgresOptionsWithContract<TContract>,
-): PostgresClient<TContract>;
-export default function postgres<TContract extends Contract<SqlStorage>>(
-  options: PostgresOptionsWithContractJson<TContract>,
-): PostgresClient<TContract>;
-export default function postgres<TContract extends Contract<SqlStorage>>(
-  options: PostgresOptions<TContract>,
-): PostgresClient<TContract> {
+export default function postgres<
+  TContract extends Contract<SqlStorage>,
+  const Scopes extends readonly AnyScopeContribution[] = NoScopes,
+>(options: PostgresOptionsWithContract<TContract, Scopes>): PostgresClient<TContract, Scopes>;
+export default function postgres<
+  TContract extends Contract<SqlStorage>,
+  const Scopes extends readonly AnyScopeContribution[] = NoScopes,
+>(options: PostgresOptionsWithContractJson<TContract, Scopes>): PostgresClient<TContract, Scopes>;
+export default function postgres<
+  TContract extends Contract<SqlStorage>,
+  const Scopes extends readonly AnyScopeContribution[] = NoScopes,
+>(options: PostgresOptions<TContract, Scopes>): PostgresClient<TContract, Scopes> {
   const contract = resolveContract(options);
   let binding = resolveOptionalPostgresBinding(options);
 
@@ -268,7 +295,9 @@ export default function postgres<TContract extends Contract<SqlStorage>>(
     return runtimeInstance;
   };
 
-  const orm: OrmClient<TContract> = ormBuilder({
+  const scopes = blindCast<Scopes, 'absent scopes mean the empty default'>(options.scopes ?? []);
+  const orm: OrmClient<TContract, Scopes> = ormBuilder({
+    scopes,
     runtime: {
       query(plan) {
         return getRuntime().query(plan);
@@ -347,7 +376,9 @@ export default function postgres<TContract extends Contract<SqlStorage>>(
 
     prepare,
 
-    transaction<R>(fn: (tx: PostgresTransactionContext<TContract>) => PromiseLike<R>): Promise<R> {
+    transaction<R>(
+      fn: (tx: PostgresTransactionContext<TContract, Scopes>) => PromiseLike<R>,
+    ): Promise<R> {
       return withTransaction(getRuntime(), (txCtx) => {
         const rawCodecInferer = stack.adapter.rawCodecInferer;
         const txSql: Db<TContract> = sqlBuilder<TContract>({
@@ -355,7 +386,8 @@ export default function postgres<TContract extends Contract<SqlStorage>>(
           rawCodecInferer,
         });
 
-        const txOrm: OrmClient<TContract> = ormBuilder({
+        const txOrm: OrmClient<TContract, Scopes> = ormBuilder({
+          scopes,
           runtime: {
             query(plan) {
               return txCtx.query(plan);
@@ -371,7 +403,7 @@ export default function postgres<TContract extends Contract<SqlStorage>>(
         // accessors (notably the `invalidated` getter, which reads a closure
         // variable in `withTransaction`) remain wired to the original object.
         // Spreading would evaluate the getter once and freeze its value.
-        const tx: PostgresTransactionContext<TContract> = Object.assign(
+        const tx: PostgresTransactionContext<TContract, Scopes> = Object.assign(
           castAs<TransactionContext>(Object.create(txCtx)),
           { sql: txSql, orm: txOrm, enums, nativeEnums },
         );
