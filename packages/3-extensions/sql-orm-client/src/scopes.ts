@@ -1,48 +1,84 @@
+import type { AnyExpression, OrderByItem } from '@internal/sql-relational-core/ast';
+
 /**
- * The type-level half of a contribution. TypeScript has no higher-kinded types, so the operations are written against two input slots that the ORM client fills in: `index` is the literal index entry from the contract and `collection` is the collection type every operation returns. `match` is the structural type an index entry must be assignable to.
+ * The type-level half of a contribution. TypeScript has no higher-kinded
+ * types, so the operations are written against two input slots that the ORM
+ * client fills in: `index` is the literal index entry from the contract and
+ * `collection` is the collection type every operation returns.
  */
 export interface ScopeOperationsShape {
-  readonly match: unknown;
   readonly index: unknown;
   readonly collection: unknown;
   readonly operations: object;
 }
 
-/**
- * Registry of collection scope contributions, keyed by contribution id. A contributing package adds its entry by declaration merging.
- */
-// biome-ignore lint/suspicious/noEmptyInterface: contributions are added by declaration merging
-export interface CollectionScopeRegistry {}
+export interface ScopeRefinement {
+  readonly filter: AnyExpression;
+  readonly defaultOrderBy?: readonly OrderByItem[];
+}
 
-type RegistryIds = keyof CollectionScopeRegistry;
+export interface ScopeOperationContext {
+  readonly tableName: string;
+  readonly namespaceId: string;
+  readonly modelName: string;
+}
 
-type MatchingIds<Index> = {
-  [Id in RegistryIds]: Index extends CollectionScopeRegistry[Id]['match' &
-    keyof CollectionScopeRegistry[Id]]
-    ? Id
-    : never;
-}[RegistryIds];
+export type ScopeOperationImplementations = Readonly<
+  Record<string, (...args: never[]) => ScopeRefinement>
+>;
 
-type ApplyShape<Shape, Index, Coll> = Shape & {
+declare const scopeContributionTypes: unique symbol;
+
+export interface CollectionScopeContribution<
+  Match = unknown,
+  Shape extends ScopeOperationsShape = ScopeOperationsShape,
+> {
+  matches(index: Readonly<Record<string, unknown>>): boolean;
+  operations(
+    index: Readonly<Record<string, unknown>>,
+    context: ScopeOperationContext,
+  ): ScopeOperationImplementations;
+  readonly [scopeContributionTypes]?: { readonly match: Match; readonly shape: Shape };
+}
+
+export type AnyScopeContribution = CollectionScopeContribution<unknown, ScopeOperationsShape>;
+
+export function defineCollectionScopes<Match, Shape extends ScopeOperationsShape>(contribution: {
+  matches(index: Readonly<Record<string, unknown>>): boolean;
+  operations(
+    index: Readonly<Record<string, unknown>>,
+    context: ScopeOperationContext,
+  ): ScopeOperationImplementations;
+}): CollectionScopeContribution<Match, Shape> {
+  return contribution;
+}
+
+type ApplyShape<Shape extends ScopeOperationsShape, Index, Coll> = (Shape & {
   readonly index: Index;
   readonly collection: Coll;
-} extends { readonly operations: infer Operations }
-  ? Operations
-  : never;
+})['operations'];
 
-type UnionToIntersection<U> = (U extends unknown ? (value: U) => void : never) extends (
-  value: infer I,
-) => void
-  ? I
-  : never;
+export type IndexMatchesAny<Contributions, Index> = Contributions extends readonly [
+  infer Head,
+  ...infer Tail,
+]
+  ? Head extends CollectionScopeContribution<infer Match, ScopeOperationsShape>
+    ? Index extends Match
+      ? true
+      : IndexMatchesAny<Tail, Index>
+    : IndexMatchesAny<Tail, Index>
+  : false;
 
-export type ScopeOperationsFor<Index, Coll> = UnionToIntersection<
-  MatchingIds<Index> extends infer Id
-    ? Id extends RegistryIds
-      ? ApplyShape<CollectionScopeRegistry[Id], Index, Coll>
-      : never
-    : never
->;
+export type ScopeOperationsFor<Contributions, Index, Coll> = Contributions extends readonly [
+  infer Head,
+  ...infer Tail,
+]
+  ? Head extends CollectionScopeContribution<infer Match, infer Shape>
+    ? Index extends Match
+      ? ApplyShape<Shape, Index, Coll> & ScopeOperationsFor<Tail, Index, Coll>
+      : ScopeOperationsFor<Tail, Index, Coll>
+    : ScopeOperationsFor<Tail, Index, Coll>
+  : unknown;
 
 export type AuthoredIndexName<Index> = Index extends { readonly prefix: infer P extends string }
   ? P
@@ -50,23 +86,28 @@ export type AuthoredIndexName<Index> = Index extends { readonly prefix: infer P 
     ? N
     : never;
 
-type ScopeKey<Index> = [MatchingIds<Index>] extends [never]
-  ? never
-  : string extends AuthoredIndexName<Index>
-    ? never
-    : AuthoredIndexName<Index>;
-
-export type ScopeNamesOfIndexes<Indexes> = Indexes extends readonly unknown[]
+export type ScopeNamesOfIndexes<Indexes, Contributions> = Indexes extends readonly unknown[]
   ? Indexes[number] extends infer Index
     ? Index extends unknown
-      ? ScopeKey<Index>
+      ? ScopeKey<Contributions, Index>
       : never
     : never
   : never;
 
-export type ScopesOfIndexes<Indexes, Coll> = Indexes extends readonly unknown[]
+type ScopeKey<Contributions, Index> =
+  IndexMatchesAny<Contributions, Index> extends true
+    ? string extends AuthoredIndexName<Index>
+      ? never
+      : AuthoredIndexName<Index>
+    : never;
+
+export type ScopesOfIndexes<Indexes, Contributions, Coll> = Indexes extends readonly unknown[]
   ? {
-      readonly [Index in Indexes[number] as ScopeKey<Index>]: ScopeOperationsFor<Index, Coll>;
+      readonly [Index in Indexes[number] as ScopeKey<Contributions, Index>]: ScopeOperationsFor<
+        Contributions,
+        Index,
+        Coll
+      >;
     }
   : Record<never, never>;
 
