@@ -290,55 +290,60 @@ export function schemaVerdictDiagnostic(inputs: {
   };
 }
 
-const OWNING_PRISMA_VERSIONS: ReadonlyMap<string, string> = new Map([
-  ['prisma6', 'Prisma 6'],
-  ['prisma7', 'Prisma 7'],
-]);
+function ownerSchemaActions(inputs: {
+  readonly owner: string;
+  readonly schemaInput: string | undefined;
+  readonly verb: 'sign' | 'verify';
+  readonly cwd: string;
+}): readonly NextAction[] {
+  const schemaPath =
+    inputs.schemaInput === undefined
+      ? 'your schema.prisma'
+      : displayPath(inputs.schemaInput, inputs.cwd);
+  return [
+    chooseAction(
+      `If ${inputs.owner} still manages this database, change ${schemaPath} to describe it as it is, re-run contract emit, then ${inputs.verb} again`,
+    ),
+    runCommandAction(
+      `Or, if Prisma 8 manages it, change the database to match the contract, then ${inputs.verb} again`,
+      '{bin} db update',
+    ),
+  ];
+}
 
-/**
- * What to do when the database does not satisfy the contract. A Prisma 6 or 7
- * source means that application still owns the database, so changing its
- * schema comes before changing the database.
- */
 export function schemaDriftNextActions(inputs: {
   readonly source: Pick<OpaqueContractSourceProvider, 'format' | 'inputs'> | undefined;
   readonly verb: 'sign' | 'verify';
   readonly cwd: string;
 }): readonly NextAction[] {
-  const { source, verb } = inputs;
-  const owner =
-    source?.format === undefined ? undefined : OWNING_PRISMA_VERSIONS.get(source.format);
-  if (owner !== undefined) {
-    const schemaInput = source?.inputs?.[0];
-    const schemaPath =
-      schemaInput === undefined ? 'your schema.prisma' : displayPath(schemaInput, inputs.cwd);
-    return [
-      chooseAction(
-        `Change ${schemaPath} to describe the database as it is (${owner} owns this database), re-run contract emit, then ${verb} again`,
-      ),
-      runCommandAction(
-        `Or change the database to match the contract, then ${verb} again`,
-        '{bin} db update',
-      ),
-    ];
-  }
+  const { source, verb, cwd } = inputs;
   const updateDatabase = runCommandAction(
     `Change the database to match the contract, then ${verb} again`,
     '{bin} db update',
   );
-  if (source?.format === 'psl') {
-    return [
-      updateDatabase,
-      runCommandAction(
-        `Or change the contract to describe the database as it is, then re-emit and ${verb} again`,
-        '{bin} contract infer',
-      ),
-    ];
+  const handEditContract = chooseAction(
+    `Or change the contract to describe the database as it is, re-run contract emit, then ${verb} again`,
+  );
+  switch (source?.format) {
+    case 'prisma6':
+      return ownerSchemaActions({ owner: 'Prisma 6', schemaInput: source.inputs?.[0], verb, cwd });
+    case 'prisma7':
+      return ownerSchemaActions({ owner: 'Prisma 7', schemaInput: source.inputs?.[0], verb, cwd });
+    case 'psl': {
+      const [only, ...rest] = source.inputs ?? [];
+      if (only === undefined || rest.length > 0) {
+        return [updateDatabase, handEditContract];
+      }
+      const path = displayPath(only, cwd);
+      return [
+        updateDatabase,
+        runCommandAction(
+          `Or replace ${path} with a contract inferred from the database, then re-emit and ${verb} again`,
+          `{bin} contract infer --output ${path}`,
+        ),
+      ];
+    }
+    default:
+      return [updateDatabase, handEditContract];
   }
-  return [
-    updateDatabase,
-    chooseAction(
-      `Or change the contract to describe the database as it is, re-run contract emit, then ${verb} again`,
-    ),
-  ];
 }

@@ -161,7 +161,7 @@ describe('db sign', () => {
       ]);
     });
 
-    it('offers contract infer as the contract-side action for a PSL source', async () => {
+    it('offers contract infer into the PSL source file as the contract-side action', async () => {
       const dir = await projectDir();
       mocks.schemaVerify.mockResolvedValue(DRIFTED);
       const config = ormConfig({
@@ -182,8 +182,8 @@ describe('db sign', () => {
         {
           kind: 'run-command',
           label:
-            'Or change the contract to describe the database as it is, then re-emit and sign again',
-          command: '{bin} contract infer',
+            'Or replace contract.prisma with a contract inferred from the database, then re-emit and sign again',
+          command: '{bin} contract infer --output contract.prisma',
         },
       ]);
     });
