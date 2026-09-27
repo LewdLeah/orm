@@ -52,11 +52,20 @@ describe('mongoScalarAuthoringTypes', () => {
     },
   );
 
-  it('pins Json, whose codec has no BSON type, to the json native type', () => {
-    expect(mongoDescriptorById('mongo/json@1')?.targetTypes).toEqual([]);
+  it('pins Json to the json native type and the JSON-representable BSON types', () => {
+    expect(mongoDescriptorById('mongo/json@1')?.targetTypes).toEqual([
+      'object',
+      'array',
+      'string',
+      'double',
+      'int',
+      'long',
+      'bool',
+      'null',
+    ]);
     expect(mongoScalarAuthoringTypes.Json).toEqual({
       kind: 'typeConstructor',
-      documentation: expect.stringMatching(/\S/),
+      documentation: expect.stringContaining('the collection validator admits only those types'),
       output: { codecId: 'mongo/json@1', nativeType: 'json' },
     });
   });

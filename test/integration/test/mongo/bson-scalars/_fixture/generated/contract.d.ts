@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'aca56cf39644e33c19f84c870164ce9cb4e2df6a14b913395b76588482786e01'>;
+  StorageHashBase<'7a5ccc371767668b57093a60068fc63c7ea5ed7b3f760573958fe8275e1df460'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -86,8 +86,30 @@ type ContractBase = Omit<
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
-                    readonly meta: {};
-                    readonly notes: {};
+                    readonly meta: {
+                      readonly bsonType: readonly [
+                        'object',
+                        'array',
+                        'string',
+                        'double',
+                        'int',
+                        'long',
+                        'bool',
+                        'null',
+                      ];
+                    };
+                    readonly notes: {
+                      readonly bsonType: readonly [
+                        'object',
+                        'array',
+                        'string',
+                        'double',
+                        'int',
+                        'long',
+                        'bool',
+                        'null',
+                      ];
+                    };
                     readonly price: { readonly bsonType: 'decimal' };
                     readonly thumbnail: { readonly bsonType: 'binData' };
                     readonly views: { readonly bsonType: 'long' };

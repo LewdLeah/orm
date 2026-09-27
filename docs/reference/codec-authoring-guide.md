@@ -399,7 +399,7 @@ The Mongo target package owns every built-in Mongo codec, as the Postgres target
 
 The source lives in `packages/3-mongo-target/1-mongo-target/src/core/{codec-ids,codecs,bson-scalar-helpers,data-types}.ts` and `src/exports/codec-types.ts`. The adapter's runtime descriptor registers `buildStandardCodecRegistry()`, and its control descriptor names each PSL scalar (`mongoScalarAuthoringTypes` in `packages/3-mongo-target/2-mongo-adapter/src/exports/control.ts`). The TypeScript builder in `@internal/mongo-contract-ts` keeps its own copy of the `CodecTypes` map; keep the two in step.
 
-| Codec id | PSL | TS builder | Application value | JSON form | BSON type (`targetTypes[0]`) |
+| Codec id | PSL | TS builder | Application value | JSON form | BSON types (`targetTypes`) |
 | --- | --- | --- | --- | --- | --- |
 | `mongo/objectId@1` | `ObjectId` | `field.objectId()` | `string` (hex) | the same string | `objectId` |
 | `mongo/string@1` | `String` | `field.string()` | `string` | the same string | `string` |
@@ -411,13 +411,13 @@ The source lives in `packages/3-mongo-target/1-mongo-target/src/core/{codec-ids,
 | `mongo/int64@1` | `Int64` | `field.int64()` | `bigint` | decimal text; a safe-integer `number` is accepted on the way in | `long` |
 | `mongo/decimal128@1` | `Decimal128` | `field.decimal128()` | decimal text without an exponent | the same text | `decimal` |
 | `mongo/binary@1` | `Binary` | `field.binary()` | `Uint8Array` | unwrapped base64 | `binData` |
-| `mongo/json@1` | `Json` | `field.json()` | `JsonValue` | the same value | none |
+| `mongo/json@1` | `Json` | `field.json()` | `JsonValue` | the same value | `object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null` |
 
 The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`: they resolve to the same codecs, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed.
 
 The JSON forms of `int64`, `decimal128` and `binary` match the Postgres `int8`, `numeric` and `bytea` codecs. `Decimal128.toString()` prints some values with an exponent (`1E+3`); the codec rewrites them without one (`1000`), keeping trailing zeros, so the text is stable across a round trip. The driver hands a stored `long` that fits in 53 bits back as a `number`, so the `int64` codec accepts `Long`, `number` and `bigint` on decode. Decoding a wire value of the wrong BSON type throws `RUNTIME.DECODE_FAILED`.
 
-`$jsonSchema` validators take each field's `bsonType` from `targetTypes[0]`. A codec that declares no BSON type, such as `mongo/json@1`, gets an empty schema (`{}`), which admits any value; the field stays listed under `properties` because the validator is closed with `additionalProperties: false`.
+`$jsonSchema` validators take each field's `bsonType` from the whole `targetTypes` list: one entry gives `bsonType: '<entry>'`, several give `bsonType: [...entries]` (`mongo/json@1` lists `object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null`). A list field applies the same to `items`, and a nullable field prepends `'null'` unless the list already has it. A codec that declares no BSON type gets an empty schema (`{}`), which admits any value; the field stays listed under `properties` because the validator is closed with `additionalProperties: false`.
 
 ## The data type a codec represents
 

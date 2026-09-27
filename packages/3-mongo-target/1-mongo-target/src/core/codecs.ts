@@ -284,7 +284,7 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
   descriptorFor(mongoJsonCodec, {
     dataType: mongoJson.id,
     traits: [],
-    targetTypes: [],
+    targetTypes: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
   }),
 ];
 

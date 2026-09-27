@@ -82,8 +82,30 @@
                     "_id": {
                       "bsonType": "objectId"
                     },
-                    "meta": {},
-                    "notes": {},
+                    "meta": {
+                      "bsonType": [
+                        "object",
+                        "array",
+                        "string",
+                        "double",
+                        "int",
+                        "long",
+                        "bool",
+                        "null"
+                      ]
+                    },
+                    "notes": {
+                      "bsonType": [
+                        "object",
+                        "array",
+                        "string",
+                        "double",
+                        "int",
+                        "long",
+                        "bool",
+                        "null"
+                      ]
+                    },
                     "price": {
                       "bsonType": "decimal"
                     },
@@ -113,7 +135,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "aca56cf39644e33c19f84c870164ce9cb4e2df6a14b913395b76588482786e01"
+    "storageHash": "7a5ccc371767668b57093a60068fc63c7ea5ed7b3f760573958fe8275e1df460"
   },
   "capabilities": {},
   "extensions": {},

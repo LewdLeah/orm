@@ -17,7 +17,8 @@ const mongoTargetTypes: Record<string, readonly string[]> = {
   'mongo/int64@1': ['long'],
   'mongo/decimal128@1': ['decimal'],
   'mongo/binary@1': ['binData'],
-  'mongo/json@1': [],
+  'mongo/json@1': ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
+  'test/unconstrained@1': [],
   'test/int-or-long@1': ['int', 'long'],
   'test/number-or-null@1': ['null', 'int'],
 };
@@ -100,12 +101,13 @@ describe('deriveJsonSchema', () => {
     });
   });
 
-  it('admits any value in a field whose codec has no BSON type, such as Json', () => {
+  it('admits any value in a field whose codec has no BSON type', () => {
     const result = deriveJsonSchema(
       {
         _id: scalarField('mongo/objectId@1'),
-        meta: scalarField('mongo/json@1'),
-        notes: scalarField('mongo/json@1', true),
+        meta: scalarField('test/unconstrained@1'),
+        notes: scalarField('test/unconstrained@1', true),
+        tags: arrayField('test/unconstrained@1'),
       },
       undefined,
       mongoCodecLookup,
@@ -113,13 +115,50 @@ describe('deriveJsonSchema', () => {
 
     expect(result.jsonSchema).toEqual({
       bsonType: 'object',
-      required: ['_id', 'meta'],
+      required: ['_id', 'meta', 'tags'],
       properties: {
         _id: { bsonType: 'objectId' },
         meta: {},
         notes: {},
+        tags: { bsonType: 'array', items: {} },
       },
       additionalProperties: false,
+    });
+  });
+
+  describe('a Json field', () => {
+    const jsonBsonTypes = ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'];
+
+    it('admits the JSON-representable BSON types, null included, when required', () => {
+      const result = deriveJsonSchema(
+        { payload: scalarField('mongo/json@1') },
+        undefined,
+        mongoCodecLookup,
+      );
+      expect(result.jsonSchema).toMatchObject({
+        required: ['payload'],
+        properties: { payload: { bsonType: jsonBsonTypes } },
+      });
+    });
+
+    it('admits the same types when nullable, without a second null', () => {
+      const result = deriveJsonSchema(
+        { payload: scalarField('mongo/json@1', true) },
+        undefined,
+        mongoCodecLookup,
+      );
+      expect(result.jsonSchema['properties']).toEqual({ payload: { bsonType: jsonBsonTypes } });
+    });
+
+    it('admits the same types for each item of a list', () => {
+      const result = deriveJsonSchema(
+        { payloads: arrayField('mongo/json@1') },
+        undefined,
+        mongoCodecLookup,
+      );
+      expect(result.jsonSchema['properties']).toEqual({
+        payloads: { bsonType: 'array', items: { bsonType: jsonBsonTypes } },
+      });
     });
   });
 
