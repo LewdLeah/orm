@@ -1084,6 +1084,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.12
@@ -4052,6 +4055,9 @@ importers:
       '@internal/sql-contract':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../2-sql/1-core/contract
+      '@internal/sql-contract-psl':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../2-sql/2-authoring/contract-psl
       '@internal/sql-errors':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../2-sql/1-core/errors
@@ -4089,9 +4095,6 @@ importers:
       '@internal/publish-surface':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../0-shared/publish-surface
-      '@internal/sql-contract-psl':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../../../2-sql/2-authoring/contract-psl
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../../test/utils
@@ -4962,6 +4965,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
       uniku:
         specifier: ^0.5.0
         version: 0.5.0
@@ -5505,6 +5511,9 @@ importers:
       '@internal/extension-pgvector':
         specifier: workspace:8.0.0-rc.12
         version: link:../../packages/3-extensions/pgvector
+      '@internal/extension-postgis':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../packages/3-extensions/postgis
       '@internal/extension-supabase':
         specifier: workspace:8.0.0-rc.12
         version: link:../../packages/3-extensions/supabase
