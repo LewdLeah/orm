@@ -25,7 +25,7 @@ import {
   int64Encode,
   int64EncodeJson,
 } from './bson-scalar-helpers';
-import { encodeBsonValue } from './bson-value';
+import { decodeBsonValue, encodeBsonValue } from './bson-value';
 import {
   MONGO_BINARY_CODEC_ID,
   MONGO_BOOLEAN_CODEC_ID,
@@ -151,11 +151,11 @@ export const mongoJsonCodec = mongoCodec({
 });
 
 /**
- * Any BSON value, passed through unchanged. The application type is `BsonValue` in `CodecTypes`; the codec is typed `unknown` so this module's declarations do not pull `codec-types` into a shared chunk. Its JSON form is canonical MongoDB Extended JSON v2, which round-trips every BSON type.
+ * Any BSON value, passed through unchanged except that decode turns a `DBRef` back into the `{ $ref, $id }` document it was stored as. The application type is `BsonValue` in `CodecTypes`; the codec is typed `unknown` so this module's declarations do not pull `codec-types` into a shared chunk. Its JSON form is canonical MongoDB Extended JSON v2, which round-trips every BSON type.
  */
 export const mongoBsonCodec = mongoCodec({
   typeId: MONGO_BSON_CODEC_ID,
-  decode: (wire: unknown) => wire,
+  decode: (wire: unknown) => decodeBsonValue(wire),
   encode: (value: unknown) => encodeBsonValue(value),
   encodeJson: (value: unknown) =>
     blindCast<JsonValue, 'canonical Extended JSON is plain JSON'>(

@@ -163,7 +163,15 @@ type BsonScalar =
   | { readonly _bsontype: 'BSONRegExp'; readonly pattern: string; readonly options: string }
   | { readonly _bsontype: 'Timestamp'; toBigInt(): bigint }
   | { readonly _bsontype: 'Int32'; valueOf(): number }
-  | { readonly _bsontype: 'Double'; valueOf(): number };
+  | { readonly _bsontype: 'Double'; valueOf(): number }
+  | {
+      readonly _bsontype: 'Code';
+      readonly code: string;
+      readonly scope?: { readonly [key: string]: BsonValue } | null;
+    }
+  | { readonly _bsontype: 'MinKey' }
+  | { readonly _bsontype: 'MaxKey' }
+  | { readonly _bsontype: 'BSONSymbol'; valueOf(): string };
 
 type BsonValue = BsonScalar | ReadonlyArray<BsonValue> | { readonly [key: string]: BsonValue };
 

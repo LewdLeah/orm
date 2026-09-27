@@ -44,6 +44,10 @@ const scalars: ReadonlyArray<readonly [string, BsonValue]> = [
   ['Timestamp', new Timestamp({ t: 1, i: 2 })],
   ['Int32', new Int32(7)],
   ['Double', new Double(2.5)],
+  ['Code', new Code('function () { return x; }', { x: 1 })],
+  ['MinKey', new MinKey()],
+  ['MaxKey', new MaxKey()],
+  ['BSONSymbol', new BSONSymbol('s')],
 ];
 
 describe('mongoBsonCodec encode', () => {
@@ -64,11 +68,7 @@ describe('mongoBsonCodec encode', () => {
     ['NaN', Number.NaN],
     ['Infinity', Number.POSITIVE_INFINITY],
     ['-Infinity', Number.NEGATIVE_INFINITY],
-    ['BSONSymbol', new BSONSymbol('s')],
-    ['Code', new Code('x')],
     ['DBRef', new DBRef('c', new ObjectId())],
-    ['MinKey', new MinKey()],
-    ['MaxKey', new MaxKey()],
   ])('refuses %s nested in an object and an array, naming the path', async (received, value) => {
     await expect(
       mongoBsonCodec.encode(notBson({ outer: { items: [0, { value }] } }), {}),
@@ -124,6 +124,25 @@ describe('mongoBsonCodec decode', () => {
       nested: [new MinKey(), { at: new Date(0) }],
     });
     expect(await mongoBsonCodec.decode(wire, {})).toBe(wire);
+  });
+
+  it('rebuilds a DBRef that bson read from a $ref/$id subdocument, keeping member BSON types', async () => {
+    const id = new ObjectId('64b7f0c2a1b2c3d4e5f60718');
+    const stored = BSON.deserialize(
+      BSON.serialize({
+        link: { $ref: 'posts', $id: id, $db: 'blog', extra: { at: new Date(0) } },
+        list: [{ $ref: 'posts', $id: 1 }],
+      }),
+    );
+    expect(stored['link']).toBeInstanceOf(DBRef);
+
+    const decoded = (await mongoBsonCodec.decode(notBson(stored), {})) as Record<string, unknown>;
+    expect(decoded).toEqual({
+      link: { $ref: 'posts', $id: id, $db: 'blog', extra: { at: new Date(0) } },
+      list: [{ $ref: 'posts', $id: 1 }],
+    });
+    expect(decoded['link']).not.toBeInstanceOf(DBRef);
+    expect((decoded['link'] as { $id: unknown }).$id).toBeInstanceOf(ObjectId);
   });
 });
 

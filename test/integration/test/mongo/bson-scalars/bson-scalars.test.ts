@@ -1,6 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { BsonValue } from '@internal/target-mongo/codec-types';
-import { Binary, Decimal128, Long, ObjectId } from 'mongodb';
+import { Binary, type Code, DBRef, Decimal128, Long, type MinKey, ObjectId } from 'mongodb';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { timeouts, withMongoPort } from '../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
@@ -116,6 +116,44 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
 
         type Row = (typeof row & object)['raw'];
         expectTypeOf<Row>().toEqualTypeOf<BsonValue | null>();
+        expectTypeOf<Code>().toExtend<Row>();
+        expectTypeOf<MinKey>().toExtend<Row>();
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'reads a DBRef stored in a Bson field as the document it holds, and round-trips { $ref, $id } through the ORM',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        const id = new ObjectId('64b7f0c2a1b2c3d4e5f60718');
+        await mongoDb.collection('posts').insertOne({
+          views: Long.fromNumber(1),
+          price: Decimal128.fromString('1'),
+          thumbnail: new Binary(new Uint8Array([1])),
+          meta: {},
+          notes: null,
+          raw: { link: new DBRef('authors', id, 'blog') },
+        });
+        await db.posts.create({
+          views: 2n,
+          price: '2',
+          thumbnail: new Uint8Array([2]),
+          meta: {},
+          notes: null,
+          raw: { $ref: 'authors', $id: id },
+        });
+
+        const rows = await db.posts.orderBy({ views: 1 }).all();
+        expect(rows.map((row) => row.raw)).toEqual([
+          { link: { $ref: 'authors', $id: id, $db: 'blog' } },
+          { $ref: 'authors', $id: id },
+        ]);
+        const [stored, created] = rows.map((row) => row.raw as Record<string, unknown>);
+        const storedLink = stored?.['link'] as Record<string, unknown> | undefined;
+        expect(storedLink?.['$id']).toBeInstanceOf(ObjectId);
+        expect(created).not.toBeInstanceOf(DBRef);
+        expect(created?.['$id']).toBeInstanceOf(ObjectId);
       }),
     timeouts.spinUpMongoMemoryServer,
   );
