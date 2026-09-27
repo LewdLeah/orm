@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { defineContract, type ScalarFieldBuilder } from '../../src/exports/contract-builder';
 
 type SqliteField = Parameters<NonNullable<Parameters<typeof defineContract>[1]>>[0]['field'];
-type AnyFieldBuilder = ScalarFieldBuilder;
 
-function storedDefault(build: (field: SqliteField) => AnyFieldBuilder): unknown {
+function storedDefault(build: (field: SqliteField) => ScalarFieldBuilder): unknown {
   const contract = defineContract({}, ({ field, model }) => ({
     models: {
       Event: model('Event', {
@@ -29,11 +28,12 @@ describe('sqlite defineContract encodes literal defaults through the column code
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
-        meta: expect.objectContaining({
+        meta: {
           modelName: 'Event',
           fieldName: 'at',
           codecId: 'sqlite/datetime@1',
-        }),
+          reason: 'codec-refused-default',
+        },
       }),
     );
   });
