@@ -43,6 +43,7 @@ import type {
 import { isDdlNode } from '@internal/sql-relational-core/ast';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { SqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codec-descriptor';
+import type { SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
 import {
   createSqliteCodecRegistryWithBuiltins,
   jsonDocumentRetag,
@@ -52,12 +53,7 @@ import { escapeLiteral, quoteIdentifier } from '@internal/target-sqlite/sql-util
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { SqliteControlAdapter } from './control-adapter';
-import type {
-  SqliteAdapterOptions,
-  SqliteCodecRegistry,
-  SqliteContract,
-  SqliteLoweredStatement,
-} from './types';
+import type { SqliteAdapterOptions, SqliteContract, SqliteLoweredStatement } from './types';
 
 function nodeKind(value: unknown): string {
   if (
