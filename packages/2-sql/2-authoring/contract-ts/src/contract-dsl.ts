@@ -23,6 +23,7 @@ import type {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { NamedConstraintSpec } from './authoring-type-utils';
+import type { AuthoredColumnDefault } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { EnumTypeHandle } from './enum-type';
 import { isEnumTypeHandle } from './enum-type';
@@ -58,7 +59,7 @@ export type ScalarFieldState<
   readonly typeRef?: TypeRef | undefined;
   readonly nullable: Nullable;
   readonly columnName?: ColumnName | undefined;
-  readonly default?: ColumnDefault | undefined;
+  readonly default?: AuthoredColumnDefault | undefined;
   readonly executionDefaults?: ExecutionMutationDefaultPhases | undefined;
   readonly many?: Many extends true ? true : undefined;
   readonly noCheck?: readonly CheckKind[] | undefined;
@@ -73,7 +74,7 @@ type AnyScalarFieldState = {
   readonly typeRef?: NamedStorageTypeRef | undefined;
   readonly nullable: boolean;
   readonly columnName?: string | undefined;
-  readonly default?: ColumnDefault | undefined;
+  readonly default?: AuthoredColumnDefault | undefined;
   readonly executionDefaults?: ExecutionMutationDefaultPhases | undefined;
   readonly many?: boolean | undefined;
   readonly noCheck?: readonly CheckKind[] | undefined;
@@ -158,7 +159,46 @@ export type GeneratedFieldSpec = {
   readonly generated: ExecutionMutationDefaultValue;
 };
 
-function toColumnDefault(value: ColumnDefaultLiteralInputValue | ColumnDefault): ColumnDefault {
+export type CodecInputTyped<Input> = { __codecInput?(input: Input): void };
+
+export type WithCodecInput<Descriptor, Input> = Descriptor & CodecInputTyped<Input>;
+
+type PackCodecInput<Pack, CodecId> = Pack extends { readonly __codecTypes?: infer CodecTypes }
+  ? CodecId extends keyof CodecTypes
+    ? CodecTypes[CodecId] extends { readonly input: infer Input }
+      ? Input
+      : never
+    : never
+  : never;
+
+export type CodecInputFromPacks<Packs, CodecId> = 0 extends 1 & Packs
+  ? Packs
+  : [PackCodecInput<Packs, CodecId>] extends [never]
+    ? ColumnDefaultLiteralInputValue
+    : PackCodecInput<Packs, CodecId>;
+
+type CodecInputOf<State> = State extends { readonly descriptor?: infer Descriptor }
+  ? NonNullable<Descriptor> extends CodecInputTyped<infer Input>
+    ? Input
+    : unknown
+  : unknown;
+
+type DefaultLiteralOf<State> =
+  unknown extends CodecInputOf<State>
+    ? unknown
+    : State extends { readonly many?: true }
+      ? readonly CodecInputOf<State>[]
+      : CodecInputOf<State>;
+
+type EnumHandleOf<State> = State extends { readonly typeRef?: infer TypeRef }
+  ? Extract<TypeRef, EnumTypeHandle>
+  : never;
+
+type DefaultArgumentOf<State> = [EnumHandleOf<State>] extends [never]
+  ? DefaultLiteralOf<State> | ColumnDefault
+  : EnumHandleOf<State>['values'][number];
+
+function toColumnDefault(value: unknown): AuthoredColumnDefault {
   if (isColumnDefault(value)) {
     return value;
   }
@@ -310,7 +350,11 @@ export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFie
     );
   }
 
-  default(value: ColumnDefaultLiteralInputValue | ColumnDefault): ScalarFieldBuilder<State> {
+  default<Self extends { readonly __state: AnyScalarFieldState }>(
+    this: Self,
+    value: DefaultArgumentOf<Self['__state']>,
+  ): ScalarFieldBuilder<State>;
+  default(value: unknown): ScalarFieldBuilder<State> {
     return new ScalarFieldBuilder({
       ...this.state,
       default: toColumnDefault(value),
@@ -484,7 +528,11 @@ export class EnumScalarFieldBuilder<
     this.#handle = handle;
   }
 
-  override default(value: Handle['values'][number]): EnumScalarFieldBuilder<Handle, State> {
+  override default<Self extends { readonly __state: AnyScalarFieldState }>(
+    this: Self,
+    value: DefaultArgumentOf<Self['__state']>,
+  ): EnumScalarFieldBuilder<Handle, State>;
+  override default(value: unknown): EnumScalarFieldBuilder<Handle, State> {
     return blindCast<
       EnumScalarFieldBuilder<Handle, State>,
       'object spread does not narrow the generic State conditional; runtime shape is correct'
@@ -507,7 +555,14 @@ export class EnumScalarFieldBuilder<
 
 function columnField<Descriptor extends ColumnTypeDescriptor>(
   descriptor: Descriptor,
-): ScalarFieldBuilder<ScalarFieldState<Descriptor, undefined, false, undefined>> {
+): ScalarFieldBuilder<
+  ScalarFieldState<
+    WithCodecInput<Descriptor, ColumnDefaultLiteralInputValue>,
+    undefined,
+    false,
+    undefined
+  >
+> {
   return new ScalarFieldBuilder({
     kind: 'scalar',
     descriptor,
@@ -517,7 +572,14 @@ function columnField<Descriptor extends ColumnTypeDescriptor>(
 
 function generatedField<Descriptor extends ColumnTypeDescriptor>(
   spec: GeneratedFieldSpec & { readonly type: Descriptor },
-): ScalarFieldBuilder<ScalarFieldState<Descriptor, undefined, false, undefined>> {
+): ScalarFieldBuilder<
+  ScalarFieldState<
+    WithCodecInput<Descriptor, ColumnDefaultLiteralInputValue>,
+    undefined,
+    false,
+    undefined
+  >
+> {
   return new ScalarFieldBuilder({
     kind: 'scalar',
     descriptor: {
@@ -531,11 +593,23 @@ function generatedField<Descriptor extends ColumnTypeDescriptor>(
 
 function namedTypeField<TypeRef extends string>(
   typeRef: TypeRef,
-): ScalarFieldBuilder<ScalarFieldState<ColumnTypeDescriptor, TypeRef, false, undefined>>;
+): ScalarFieldBuilder<
+  ScalarFieldState<
+    WithCodecInput<ColumnTypeDescriptor, ColumnDefaultLiteralInputValue>,
+    TypeRef,
+    false,
+    undefined
+  >
+>;
 function namedTypeField<TypeRef extends StorageTypeInstance>(
   typeRef: TypeRef,
 ): ScalarFieldBuilder<
-  ScalarFieldState<ColumnTypeDescriptor<TypeRef['codecId']>, TypeRef, false, undefined>
+  ScalarFieldState<
+    WithCodecInput<ColumnTypeDescriptor<TypeRef['codecId']>, ColumnDefaultLiteralInputValue>,
+    TypeRef,
+    false,
+    undefined
+  >
 >;
 function namedTypeField<Handle extends EnumTypeHandle>(
   typeRef: Handle,

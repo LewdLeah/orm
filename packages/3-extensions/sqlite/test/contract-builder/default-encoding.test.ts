@@ -24,7 +24,7 @@ describe('sqlite defineContract encodes literal defaults through the column code
 
   it('refuses a string given to field.temporal.datetime()', () => {
     expect(() =>
-      storedDefault((field) => field.temporal.datetime().default('2024-01-01T00:00:00Z')),
+      storedDefault((field) => field.temporal.datetime().default('2024-01-01T00:00:00Z' as never)),
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',

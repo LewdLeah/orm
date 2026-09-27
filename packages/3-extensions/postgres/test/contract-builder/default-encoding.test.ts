@@ -8,7 +8,6 @@ import {
 } from '../../src/exports/contract-builder';
 
 type PostgresField = Parameters<NonNullable<Parameters<typeof defineContract>[1]>>[0]['field'];
-type DefaultArgument = Parameters<ScalarFieldBuilder['default']>[0];
 
 function storedDefault(build: (field: PostgresField) => ScalarFieldBuilder): unknown {
   const contract = defineContract({}, ({ field, model }) => ({
@@ -21,14 +20,16 @@ function storedDefault(build: (field: PostgresField) => ScalarFieldBuilder): unk
   return contract.storage.namespaces['public']?.entries.table?.['Event']?.columns['at']?.default;
 }
 
-function untypedDefault(value: Temporal.Instant): DefaultArgument {
-  return value as unknown as DefaultArgument;
+function fromUntypedCaller(value: unknown): never {
+  return value as never;
 }
 
 describe('postgres defineContract encodes literal defaults through the column codec', () => {
   describe('field.dateTime()', () => {
     it('refuses a string, naming the model and field and carrying the codec message', () => {
-      expect(() => storedDefault((field) => field.dateTime().default('2024-01-01'))).toThrow(
+      expect(() =>
+        storedDefault((field) => field.dateTime().default(fromUntypedCaller('2024-01-01'))),
+      ).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.DEFAULT_INVALID',
           message:
@@ -47,7 +48,7 @@ describe('postgres defineContract encodes literal defaults through the column co
     it('stores the text the codec produces for a Temporal.Instant', () => {
       expect(
         storedDefault((field) =>
-          field.dateTime().default(untypedDefault(Temporal.Instant.from('2024-01-01T00:00:00Z'))),
+          field.dateTime().default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
         ),
       ).toEqual({ kind: 'literal', value: '2024-01-01T00:00:00Z' });
     });
@@ -68,7 +69,7 @@ describe('postgres defineContract encodes literal defaults through the column co
   });
 
   it('refuses a fractional number on a bigint column', () => {
-    expect(() => storedDefault((field) => field.bigint().default(1.5))).toThrow(
+    expect(() => storedDefault((field) => field.bigint().default(fromUntypedCaller(1.5)))).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
         meta: {
@@ -82,7 +83,14 @@ describe('postgres defineContract encodes literal defaults through the column co
   });
 
   it('says which element of a list default the codec refused', () => {
-    expect(() => storedDefault((field) => field.bigint().many().default([1, 1.5]))).toThrow(
+    expect(() =>
+      storedDefault((field) =>
+        field
+          .bigint()
+          .many()
+          .default(fromUntypedCaller([1, 1.5])),
+      ),
+    ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
         message:
@@ -134,7 +142,10 @@ describe('postgres defineContract encodes literal defaults through the column co
       ({ field, model }) => ({
         models: {
           Event: model('Event', {
-            fields: { id: field.id.uuidv4String(), at: field.dateTime().default('2024-01-01') },
+            fields: {
+              id: field.id.uuidv4String(),
+              at: field.dateTime().default(fromUntypedCaller('2024-01-01')),
+            },
           }),
         },
       }),
