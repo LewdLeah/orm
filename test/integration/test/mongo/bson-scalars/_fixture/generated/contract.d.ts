@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'7a5ccc371767668b57093a60068fc63c7ea5ed7b3f760573958fe8275e1df460'>;
+  StorageHashBase<'974e7f2db2aa6abeecb527ee1bbf054d6006ce75d2827d71bc04addade515df6'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -32,6 +32,7 @@ export type FieldOutputTypes = {
       readonly meta: CodecTypes['mongo/json@1']['output'];
       readonly notes: CodecTypes['mongo/json@1']['output'] | null;
       readonly price: CodecTypes['mongo/decimal128@1']['output'];
+      readonly raw: CodecTypes['mongo/bson@1']['output'] | null;
       readonly thumbnail: CodecTypes['mongo/binary@1']['output'];
       readonly views: CodecTypes['mongo/int64@1']['output'];
     };
@@ -44,6 +45,7 @@ export type FieldInputTypes = {
       readonly meta: CodecTypes['mongo/json@1']['input'];
       readonly notes: CodecTypes['mongo/json@1']['input'] | null;
       readonly price: CodecTypes['mongo/decimal128@1']['input'];
+      readonly raw: CodecTypes['mongo/bson@1']['input'] | null;
       readonly thumbnail: CodecTypes['mongo/binary@1']['input'];
       readonly views: CodecTypes['mongo/int64@1']['input'];
     };
@@ -56,6 +58,7 @@ export namespace Models {
     meta: CodecTypes['mongo/json@1']['output'];
     notes: CodecTypes['mongo/json@1']['output'] | null;
     price: CodecTypes['mongo/decimal128@1']['output'];
+    raw: CodecTypes['mongo/bson@1']['output'] | null;
     thumbnail: CodecTypes['mongo/binary@1']['output'];
     views: CodecTypes['mongo/int64@1']['output'];
     readonly [RelationKeys]?: never;
@@ -111,6 +114,7 @@ type ContractBase = Omit<
                       ];
                     };
                     readonly price: { readonly bsonType: 'decimal' };
+                    readonly raw: {};
                     readonly thumbnail: { readonly bsonType: 'binData' };
                     readonly views: { readonly bsonType: 'long' };
                   };
@@ -155,6 +159,10 @@ type ContractBase = Omit<
               readonly price: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/decimal128@1' };
+              };
+              readonly raw: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bson@1' };
               };
               readonly thumbnail: {
                 readonly nullable: false;

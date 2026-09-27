@@ -43,6 +43,13 @@
                   "kind": "scalar"
                 }
               },
+              "raw": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/bson@1",
+                  "kind": "scalar"
+                }
+              },
               "thumbnail": {
                 "nullable": false,
                 "type": {
@@ -109,6 +116,7 @@
                     "price": {
                       "bsonType": "decimal"
                     },
+                    "raw": {},
                     "thumbnail": {
                       "bsonType": "binData"
                     },
@@ -135,7 +143,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "7a5ccc371767668b57093a60068fc63c7ea5ed7b3f760573958fe8275e1df460"
+    "storageHash": "974e7f2db2aa6abeecb527ee1bbf054d6006ce75d2827d71bc04addade515df6"
   },
   "capabilities": {},
   "extensions": {},

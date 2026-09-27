@@ -19,6 +19,7 @@ const mongoTargetTypes: Record<string, readonly string[]> = {
   'mongo/binary@1': ['binData'],
   'mongo/json@1': ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
   'test/unconstrained@1': [],
+  'mongo/bson@1': [],
   'test/int-or-long@1': ['int', 'long'],
   'test/number-or-null@1': ['null', 'int'],
 };
@@ -123,6 +124,23 @@ describe('deriveJsonSchema', () => {
         tags: { bsonType: 'array', items: {} },
       },
       additionalProperties: false,
+    });
+  });
+
+  it('leaves a Bson field unconstrained when required, nullable or a list', () => {
+    const result = deriveJsonSchema(
+      {
+        raw: scalarField('mongo/bson@1'),
+        maybe: scalarField('mongo/bson@1', true),
+        many: arrayField('mongo/bson@1'),
+      },
+      undefined,
+      mongoCodecLookup,
+    );
+    expect(result.jsonSchema['properties']).toEqual({
+      raw: {},
+      maybe: {},
+      many: { bsonType: 'array', items: {} },
     });
   });
 

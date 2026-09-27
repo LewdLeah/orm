@@ -1,5 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
-import { Binary, Decimal128, Long } from 'mongodb';
+import type { BsonValue } from '@internal/target-mongo/codec-types';
+import { Binary, Decimal128, Long, ObjectId } from 'mongodb';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { timeouts, withMongoPort } from '../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
@@ -60,6 +61,59 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
         expectTypeOf<Row['price']>().toEqualTypeOf<string>();
         expectTypeOf<Row['thumbnail']>().toEqualTypeOf<Uint8Array>();
         expectTypeOf<Row['meta']>().toEqualTypeOf<JsonValue>();
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'writes BSON values into a Bson field through the ORM and reads them back with their types',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        const objectId = new ObjectId('64b7f0c2a1b2c3d4e5f60718');
+        const uuid = new Uint8Array(16).fill(9);
+        await db.posts.create({
+          views: 1n,
+          price: '1',
+          thumbnail: new Uint8Array([1]),
+          meta: {},
+          notes: null,
+          raw: {
+            objectId,
+            long: Long.fromBigInt(2n ** 60n),
+            decimal: Decimal128.fromString('1234.5600'),
+            uuid: new Binary(uuid, 4),
+            nested: { list: [1, 'two', { deep: objectId }] },
+          },
+        });
+
+        const stored = await mongoDb.collection('posts').findOne({});
+        expect(stored?.['raw']?.['objectId']).toBeInstanceOf(ObjectId);
+
+        const [row] = await db.posts.all();
+        const raw = row?.raw as Record<string, Record<string, unknown>>;
+        expect({
+          objectId: [raw['objectId']?.['_bsontype'], raw['objectId']?.toString()],
+          long: [raw['long']?.['_bsontype'], raw['long']?.toString()],
+          decimal: [raw['decimal']?.['_bsontype'], raw['decimal']?.toString()],
+          uuid: [
+            raw['uuid']?.['_bsontype'],
+            raw['uuid']?.['sub_type'],
+            [...(raw['uuid'] as unknown as Binary).value()],
+          ],
+          deep: (raw['nested'] as { list: [number, string, { deep: ObjectId }] }).list[2].deep
+            ._bsontype,
+          list: (raw['nested'] as { list: unknown[] }).list.slice(0, 2),
+        }).toEqual({
+          objectId: ['ObjectId', '64b7f0c2a1b2c3d4e5f60718'],
+          long: ['Long', (2n ** 60n).toString()],
+          decimal: ['Decimal128', '1234.5600'],
+          uuid: ['Binary', 4, [...uuid]],
+          deep: 'ObjectId',
+          list: [1, 'two'],
+        });
+
+        type Row = (typeof row & object)['raw'];
+        expectTypeOf<Row>().toEqualTypeOf<BsonValue | null>();
       }),
     timeouts.spinUpMongoMemoryServer,
   );
