@@ -38,11 +38,11 @@ Changing the preset changes the column's codec, and so the type your queries rea
 
 On Node 24 there is no global `Temporal`. A contract file that creates a `Temporal` value must load an implementation itself, for example with `import 'temporal-polyfill/full/global'` as its first import. The type check on a `Temporal` field needs the `Temporal` type declarations in the project, for example from `temporal-polyfill/global`; without them the parameter is unchecked. The error shown above is the one you get with an implementation loaded; without one, the codec reports that the runtime has no global `Temporal` implementation.
 
-`.default(null)` used to store `null`. It is now a type error on a field typed from its codec, because no built-in codec takes `null` as input. When the contract is built, the codec receives the `null`: a codec that checks its input, such as `pg/int8@1`, refuses it with `CONTRACT.DEFAULT_INVALID`, and a codec that passes any value through, such as `pg/text@1`, still stores `null`. A column without a default already defaults to `NULL` in the database, so remove the call.
+`.default(null)` used to store `null`. It is now a type error on a field whose codec input type does not include `null`, which is every built-in codec except the JSON codecs: `field.json().optional().default(null)` still compiles and stores `null`. When the contract is built, the codec receives the `null`: a codec that checks its input, such as `pg/int8@1`, refuses it with `CONTRACT.DEFAULT_INVALID`, and a codec that passes any value through, such as `pg/text@1`, still stores `null`. A column without a default already defaults to `NULL` in the database, so remove the call.
 
-A JavaScript `number` on a `bigint` field (codec `pg/int8@1`), such as `field.bigint().default(1)` inside the `defineContract` factory, is now a type error. Write a `bigint` literal: `field.bigint().default(1n)`. The stored value is the same digit text, `"1"`.
+A JavaScript `number` on a `bigint` field (codec `pg/int8@1`), such as `field.bigint().default(1)` inside the `defineContract` factory, is now a type error. Write a `bigint` literal: `field.bigint().default(1n)`. The default is stored as `"1"`, as the table below shows.
 
-A default the codec accepts can be stored in a different form than before:
+A default that gets past the type check, for example from an untyped caller, is stored in a different form than before:
 
 | Default | Stored before | Stored now |
 | --- | --- | --- |
@@ -52,8 +52,11 @@ A default the codec accepts can be stored in a different form than before:
 
 A contract with such a default emits a different `contract.json` and a different storage hash. Re-emit the contract and review the diff of `contract.json`.
 
+A literal default on a column whose codec no pack in the contract declares now fails with `CONTRACT.DEFAULT_INVALID`, because nothing can check it. List the pack that owns the codec in the `extensions` of `defineContract`.
+
 ### For extension authors
 
 - A pack passed in `extensions` contributes its codecs to this lookup through `types.codecTypes.codecDescriptors`. A default on a column of your codec is now passed to your codec's `encodeJson`, built with the column's `typeParams`. Make `encodeJson` throw for a value it cannot encode; the build reports your message.
 - A codec descriptor that the target's codec registry refuses (for Postgres, one that does not extend `PostgresCodecDescriptor` and is not wrapped with `postgresCodec()`), or that reuses a built-in codec id, now fails `defineContract` as it already failed when the control stack was assembled.
 - A caller who passes `codecLookup` to `defineContract` keeps that lookup; the facade does not add to it.
+- A column helper that is a function, such as `varcharColumn(n)`, `timeTemporalColumn()` or pgvector's `vector(n)`, now declares its literal codec id in its return type. One variable can no longer be reassigned between the results of different helpers; annotate such a variable as `ColumnTypeDescriptor`.
