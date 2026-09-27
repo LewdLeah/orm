@@ -2919,21 +2919,11 @@ export type Collection<
   } & {
     readonly [K in Exclude<
       ScopeNamesOfIndexes<ModelTableIndexes<TContract, ModelName, State['nsId']>>,
-      ReservedCollectionMemberName
+      | 'scopes'
+      | keyof CollectionImpl<TContract, ModelName, Row, State>
+      | keyof AggregateIncludeReducers<TContract, ModelName, State['nsId']>
     >]: CollectionScopes<TContract, ModelName, Row, State>[K];
   };
-
-/**
- * Names a scope is never placed under directly. Computed once from the collection class with fixed type arguments, plus the aggregate operations every SQL target declares.
- */
-export type ReservedCollectionMemberName =
-  | 'scopes'
-  | 'count'
-  | 'sum'
-  | 'avg'
-  | 'min'
-  | 'max'
-  | keyof CollectionImpl<Contract<SqlStorage>, string, unknown, DefaultCollectionTypeState>;
 
 export type CollectionScopes<
   TContract extends Contract<SqlStorage>,
