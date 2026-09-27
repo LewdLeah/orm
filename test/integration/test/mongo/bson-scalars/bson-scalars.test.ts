@@ -20,6 +20,7 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
           thumbnail,
           meta,
           notes: null,
+          raw: null,
         });
         await db.posts.create({
           views: 7n,
@@ -27,6 +28,7 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
           thumbnail: new Uint8Array([]),
           meta: [1, 'two'],
           notes: 'plain text',
+          raw: null,
         });
 
         const stored = await mongoDb.collection('posts').find().sort({ views: 1 }).toArray();
