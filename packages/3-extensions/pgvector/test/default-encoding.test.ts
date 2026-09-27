@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { vector } from '../src/exports/column-types';
 import pgvector from '../src/exports/pack';
 
-function embeddingDefault(literal: readonly number[], form: 'namedType' | 'column'): unknown {
+function embeddingDefault(literal: number[], form: 'namedType' | 'column'): unknown {
   const contract = defineContract({ extensions: { pgvector } }, ({ field, model, type }) => {
     const types = { Embedding: type.pgvector.Vector(3) };
     const embedding =
