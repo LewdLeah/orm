@@ -116,8 +116,6 @@ describe('sign a database this toolchain has never seen, then transition to wire
         contractMode: 'psl',
       });
 
-      // The base contract does not describe this database, so sign refuses
-      // and offers both sides: change the database, or infer the contract.
       const emitBase = await runContractEmit(ctx);
       expect(emitBase.exitCode, `2.0: emit base\n${stripAnsi(emitBase.stderr)}`).toBe(0);
       const refused = await runDbSign(ctx, ['--json']);
@@ -131,8 +129,8 @@ describe('sign a database this toolchain has never seen, then transition to wire
         {
           kind: 'run-command',
           label:
-            'Or change the contract to describe the database as it is, then re-emit and sign again',
-          command: '{bin} contract infer',
+            'Or replace contract.prisma with a contract inferred from the database, then re-emit and sign again',
+          command: '{bin} contract infer --output contract.prisma',
         },
       ]);
 
