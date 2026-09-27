@@ -8,7 +8,7 @@ import { blindCast } from '@internal/utils/casts';
 import { aggregateOperationNames } from './aggregate-operations';
 import { type Collection, CollectionBase, reservedCollectionMemberNames } from './collection';
 import { ormError } from './orm-errors';
-import type { AnyScopeContribution, ScopesOfIndexes } from './scopes';
+import type { AnyScopeContribution, ScopeNamesOfIndexes, ScopesOfIndexes } from './scopes';
 import { domainModelNamesInNamespace, domainModelTableInNamespace } from './storage-resolution';
 import type {
   CollectionContext,
@@ -91,6 +91,11 @@ export type CustomCollectionWithScopes<
   Custom,
 > = Custom & {
   readonly scopes: CustomCollectionScopes<TContract, ModelName, NsId, Scopes, Custom>;
+} & {
+  readonly [K in Exclude<
+    ScopeNamesOfIndexes<ModelTableIndexes<TContract, ModelName, NsId>, Scopes>,
+    keyof Custom
+  >]: CustomCollectionScopes<TContract, ModelName, NsId, Scopes, Custom>[K];
 };
 
 type NamespaceModelNames<
