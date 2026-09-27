@@ -32,7 +32,10 @@ function interpret(schema: string) {
         ([name, output]) => [name, output.codecId],
       ),
     ),
-    controlMutationDefaults: stack.controlMutationDefaults,
+    controlMutationDefaults: {
+      dataTypeEntries: {},
+      defaultFunctionRegistry: new Map(),
+    },
     codecLookup: stack.codecLookup,
     authoringContributions: stack.authoringContributions,
   });
