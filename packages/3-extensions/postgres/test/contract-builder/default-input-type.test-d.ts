@@ -5,7 +5,15 @@ import {
   varcharColumn,
 } from '@internal/adapter-postgres/column-types';
 import { test } from 'vitest';
-import { defineContract, enumType, member, now, sql } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field as importedField,
+  member,
+  now,
+  type ScalarFieldBuilder,
+  sql,
+} from '../../src/exports/contract-builder';
 
 const Level = enumType(
   'Level',
@@ -63,6 +71,14 @@ test('.default() takes the input type of the field codec', () => {
             instant: field.dateTime().default('2024-01-01'),
             // @ts-expect-error pg/text@1 takes a string, not a number
             text: field.text().default(1),
+            // @ts-expect-error pg/int8@1 takes a bigint, not a number
+            big: field.bigint().default(1),
+            // @ts-expect-error pg/bytea@1 takes a Uint8Array, not a string
+            bytes: field.bytes().default('x'),
+            // @ts-expect-error pg/timestamptz-date@1 takes a Date, not a string
+            jsDate: field.temporal.timestamptzJsDate().default('2024-01-01T00:00:00Z'),
+            // @ts-expect-error pg/timestamptz-string@1 takes a string, not a Date
+            isoString: field.temporal.timestamptzString().default(new Date()),
             // @ts-expect-error a list field takes an array
             list: field.bigint().many().default(1n),
             // @ts-expect-error an enum field takes one of its member values
@@ -85,4 +101,16 @@ test('.default() takes the input type of the field codec', () => {
       types,
     };
   });
+});
+
+test('the directly imported field accepts any value, which the build checks', () => {
+  importedField.column(int8Column).default(1n);
+  importedField.column(int8Column).default(new Uint8Array([120]));
+  importedField.namedType('Counter').default(1n);
+});
+
+test('a builder held as the bare ScalarFieldBuilder type accepts any value', () => {
+  const builder: ScalarFieldBuilder = importedField.column(int8Column);
+  builder.default(1n);
+  builder.default({ kind: 'function', expression: 'now()' });
 });

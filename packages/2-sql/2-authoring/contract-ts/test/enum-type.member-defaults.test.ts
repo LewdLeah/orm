@@ -17,8 +17,14 @@ const IntPriority = enumType('IntPriority', pgInt, member('Low', 1), member('Hig
 
 describe('enum builder .default() accepts member values only', () => {
   it('compiles with a valid member value (string codec)', () => {
-    field.namedType(Priority).default('low');
-    field.namedType(Priority).default(Priority.members.Urgent);
+    expect(field.namedType(Priority).default('low').build().default).toEqual({
+      kind: 'literal',
+      value: 'low',
+    });
+    expect(field.namedType(Priority).default(Priority.members.Urgent).build().default).toEqual({
+      kind: 'literal',
+      value: 'urgent',
+    });
   });
 
   it('rejects a non-member string at compile time', () => {
@@ -36,8 +42,14 @@ describe('enum builder .default() accepts member values only', () => {
   });
 
   it('compiles with a valid int member value (int codec)', () => {
-    field.namedType(IntPriority).default(1);
-    field.namedType(IntPriority).default(IntPriority.members.High);
+    expect(field.namedType(IntPriority).default(1).build().default).toEqual({
+      kind: 'literal',
+      value: 1,
+    });
+    expect(field.namedType(IntPriority).default(IntPriority.members.High).build().default).toEqual({
+      kind: 'literal',
+      value: 10,
+    });
   });
 
   it('rejects a non-member int value at compile time', () => {

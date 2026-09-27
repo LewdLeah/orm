@@ -94,7 +94,7 @@ describe('postgres defineContract encodes literal defaults through the column co
           fieldName: 'at',
           codecId: 'pg/int8@1',
           reason: 'codec-refused-default',
-          element: 2,
+          elementPosition: 2,
         },
       }),
     );
@@ -148,7 +148,13 @@ describe('postgres defineContract encodes literal defaults through the column co
     const contract = defineContract(
       {
         codecLookup: {
-          get: () => undefined,
+          get: (id) => ({
+            id,
+            encode: async (value: unknown) => value,
+            decode: async (wire: unknown) => wire,
+            encodeJson: () => 'encoded by the caller lookup',
+            decodeJson: (json: unknown) => json,
+          }),
           targetTypesFor: () => undefined,
           renderOutputTypeFor: () => undefined,
         },
@@ -158,7 +164,7 @@ describe('postgres defineContract encodes literal defaults through the column co
           Event: model('Event', {
             fields: {
               id: field.id.uuidv4String(),
-              at: field.dateTime().default(fromUntypedCaller('2024-01-01')),
+              at: field.dateTime().default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
             },
           }),
         },
@@ -166,6 +172,6 @@ describe('postgres defineContract encodes literal defaults through the column co
     );
     expect(
       contract.storage.namespaces['public']?.entries.table?.['Event']?.columns['at']?.default,
-    ).toEqual({ kind: 'literal', value: '2024-01-01' });
+    ).toEqual({ kind: 'literal', value: 'encoded by the caller lookup' });
   });
 });
