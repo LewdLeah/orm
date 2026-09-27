@@ -65,6 +65,25 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
   );
 
   it(
+    'refuses to read a Json field that holds a date, naming its path inside the field',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        await mongoDb.collection('posts').insertOne({
+          views: Long.fromNumber(1),
+          price: Decimal128.fromString('1'),
+          thumbnail: new Binary(new Uint8Array([1])),
+          meta: { events: [{ at: new Date(0) }] },
+          notes: null,
+        });
+
+        await expect(db.posts.all()).rejects.toThrow(
+          'mongo/json@1 wire value contains a non-JSON BSON date at events.0.at',
+        );
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'reads a Decimal128 stored in exponent form as plain decimal text',
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {

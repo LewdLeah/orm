@@ -413,6 +413,8 @@ The source lives in `packages/3-mongo-target/1-mongo-target/src/core/{codec-ids,
 | `mongo/binary@1` | `Binary` | `field.binary()` | `Uint8Array` | unwrapped base64 | `binData` |
 | `mongo/json@1` | `Json` | `field.json()` | `JsonValue` | the same value | `object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null` |
 
+`Json` (`mongo/json@1`) means a JSON value, no more. Encode accepts exactly a plain JSON value (plain objects, arrays without holes, strings, finite numbers, booleans, `null`) and refuses anything else at any depth with `RUNTIME.ENCODE_FAILED`, naming its path. Decode accepts a stored value whose every part is a BSON `object`, `array`, `string`, `double`, `int`, `bool`, `null`, or a `long` in the safe-integer range (returned as a `number`), and refuses anything else (a `Date`, `ObjectId`, `Decimal128`, `Binary`, regex, timestamp, a larger `long`, a non-finite double) with `RUNTIME.DECODE_FAILED`, naming its BSON type and path. The validator admits the same BSON types at the field's top level.
+
 The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`: they resolve to the same codecs, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed.
 
 The JSON forms of `int64`, `decimal128` and `binary` match the Postgres `int8`, `numeric` and `bytea` codecs. `Decimal128.toString()` prints some values with an exponent (`1E+3`); the codec rewrites them without one (`1000`), keeping trailing zeros, so the text is stable across a round trip. The driver hands a stored `long` that fits in 53 bits back as a `number`, so the `int64` codec accepts `Long`, `number` and `bigint` on decode. Decoding a wire value of the wrong BSON type throws `RUNTIME.DECODE_FAILED`.

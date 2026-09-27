@@ -1,0 +1,171 @@
+import type { JsonValue } from '@internal/contract/types';
+import {
+  Binary,
+  BSONRegExp,
+  BSONSymbol,
+  Code,
+  DBRef,
+  Decimal128,
+  Double,
+  Int32,
+  Long,
+  MaxKey,
+  MinKey,
+  ObjectId,
+  Timestamp,
+} from 'bson';
+import { describe, expect, it } from 'vitest';
+import { mongoJsonCodec } from '../src/core/codecs';
+
+function notJson(value: unknown): JsonValue {
+  return value as JsonValue;
+}
+
+function wire(value: unknown): JsonValue {
+  return value as JsonValue;
+}
+
+function encodeRefusal(received: string, path: string) {
+  return expect.objectContaining({
+    code: 'RUNTIME.ENCODE_FAILED',
+    message: `mongo/json@1 value must be a JSON value; received ${received} at ${path}`,
+  });
+}
+
+function decodeRefusal(type: string, path: string) {
+  return expect.objectContaining({
+    code: 'RUNTIME.DECODE_FAILED',
+    message: `mongo/json@1 wire value contains a non-JSON BSON ${type} at ${path}`,
+  });
+}
+
+class Point {
+  constructor(
+    readonly x: number,
+    readonly y: number,
+  ) {}
+}
+
+describe('mongoJsonCodec encode', () => {
+  it('passes a plain JSON value through unchanged, whatever its key names', async () => {
+    const nullPrototype = Object.assign(Object.create(null), { a: 1 });
+    const value = notJson({
+      $set: { 'a.b': [1, 'two', null, true, { c: 1.5 }] },
+      empty: {},
+      nullPrototype,
+    });
+    expect(await mongoJsonCodec.encode(value, {})).toBe(value);
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['bigint', 1n],
+    ['symbol', Symbol('s')],
+    ['function', () => 1],
+    ['Date', new Date(0)],
+    ['ObjectId', new ObjectId()],
+    ['Long', Long.fromNumber(1)],
+    ['Decimal128', Decimal128.fromString('1')],
+    ['Binary', new Binary(new Uint8Array([1]))],
+    ['BSONRegExp', new BSONRegExp('a', 'i')],
+    ['Timestamp', new Timestamp({ t: 1, i: 1 })],
+    ['Int32', new Int32(1)],
+    ['Double', new Double(1)],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['-Infinity', Number.NEGATIVE_INFINITY],
+    ['Map', new Map()],
+    ['Set', new Set()],
+    ['RegExp', /a/],
+    ['Uint8Array', new Uint8Array([1])],
+    ['Point', new Point(1, 2)],
+  ])('refuses %s nested in an object and an array, naming the path', async (received, value) => {
+    await expect(
+      mongoJsonCodec.encode(notJson({ outer: { items: [0, { value }] } }), {}),
+    ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
+  });
+
+  it('refuses a hole in a sparse array', async () => {
+    const sparse: unknown[] = [1];
+    sparse[2] = 3;
+    await expect(mongoJsonCodec.encode(notJson({ list: sparse }), {})).rejects.toThrow(
+      encodeRefusal('sparse array hole', 'list.1'),
+    );
+  });
+
+  it('says "the root" when the value itself is not JSON', async () => {
+    await expect(mongoJsonCodec.encode(notJson(new Date(0)), {})).rejects.toThrow(
+      encodeRefusal('Date', 'the root'),
+    );
+  });
+});
+
+describe('mongoJsonCodec decode', () => {
+  it('returns a JSON wire value as the same JSON value', async () => {
+    const document = { a: [1, 'two', null, true, { c: 1.5 }], $d: { 'e.f': [] } };
+    expect(await mongoJsonCodec.decode(wire(document), {})).toEqual(document);
+  });
+
+  it.each([
+    ['date', new Date(0)],
+    ['objectId', new ObjectId()],
+    ['decimal', Decimal128.fromString('1.5')],
+    ['binData', new Binary(new Uint8Array([1]))],
+    ['regex', /a/i],
+    ['regex', new BSONRegExp('a', 'i')],
+    ['timestamp', new Timestamp({ t: 1, i: 1 })],
+    ['long', Long.fromBigInt(2n ** 53n)],
+    ['long', 2n ** 53n],
+    ['double', Number.NaN],
+    ['double', Number.POSITIVE_INFINITY],
+    ['double', new Double(Number.NEGATIVE_INFINITY)],
+    ['undefined', undefined],
+    ['symbol', new BSONSymbol('s')],
+    ['javascript', new Code('x')],
+    ['dbPointer', new DBRef('c', new ObjectId())],
+    ['minKey', new MinKey()],
+    ['maxKey', new MaxKey()],
+  ])('refuses a BSON %s nested in an object and an array, naming the path', async (type, value) => {
+    await expect(
+      mongoJsonCodec.decode(wire({ outer: { items: [0, { value }] } }), {}),
+    ).rejects.toThrow(decodeRefusal(type, 'outer.items.1.value'));
+  });
+
+  it('refuses an object the driver does not produce instead of dropping its contents', async () => {
+    await expect(mongoJsonCodec.decode(wire({ m: new Map([['k', 1]]) }), {})).rejects.toThrow(
+      decodeRefusal('Map', 'm'),
+    );
+  });
+
+  it('says "the root" when the wire value itself is not JSON', async () => {
+    await expect(mongoJsonCodec.decode(wire(new Date(0)), {})).rejects.toThrow(
+      decodeRefusal('date', 'the root'),
+    );
+  });
+
+  it('decodes a long at 2^53 - 1 as a number and refuses one at 2^53', async () => {
+    const largestSafe = 2n ** 53n - 1n;
+    expect(await mongoJsonCodec.decode(wire({ n: Long.fromBigInt(largestSafe) }), {})).toEqual({
+      n: Number(largestSafe),
+    });
+    expect(await mongoJsonCodec.decode(wire({ n: largestSafe }), {})).toEqual({
+      n: Number(largestSafe),
+    });
+    await expect(
+      mongoJsonCodec.decode(wire({ n: Long.fromBigInt(largestSafe + 1n) }), {}),
+    ).rejects.toThrow(decodeRefusal('long', 'n'));
+  });
+
+  it('unwraps Int32 and Double wrappers to numbers', async () => {
+    expect(
+      await mongoJsonCodec.decode(wire({ i: new Int32(7), d: [new Double(1.5)] }), {}),
+    ).toEqual({ i: 7, d: [1.5] });
+  });
+
+  it('keeps a "__proto__" key as an own property', async () => {
+    const document = JSON.parse('{"__proto__": {"polluted": true}}');
+    const decoded = await mongoJsonCodec.decode(wire(document), {});
+    expect(Object.getPrototypeOf(decoded)).toBe(Object.prototype);
+    expect(Object.hasOwn(decoded as object, '__proto__')).toBe(true);
+  });
+});

@@ -51,6 +51,7 @@ import {
   mongoString,
   mongoVector,
 } from './data-types';
+import { decodeJsonValue, encodeJsonValue } from './json-value';
 import { mongoTargetError } from './mongo-target-errors';
 
 export const mongoObjectIdCodec = mongoCodec({
@@ -138,12 +139,12 @@ export const mongoBinaryCodec = mongoCodec({
 });
 
 /**
- * Any JSON value, stored as the BSON document, array or scalar it maps to.
+ * A JSON value, stored as the BSON object, array, string, number, boolean or null it maps to. Encode and decode refuse any other value at any depth, naming its path.
  */
 export const mongoJsonCodec = mongoCodec({
   typeId: MONGO_JSON_CODEC_ID,
-  decode: (wire: JsonValue) => wire,
-  encode: (value: JsonValue) => value,
+  decode: (wire: JsonValue) => decodeJsonValue(wire),
+  encode: (value: JsonValue) => encodeJsonValue(value),
 });
 
 /**
