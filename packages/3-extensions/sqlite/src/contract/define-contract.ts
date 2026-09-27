@@ -1,7 +1,7 @@
-import { assembleSqliteCodecRegistry } from '@internal/adapter-sqlite/control';
+import { assembleSqliteCodecRegistry } from '@internal/adapter-sqlite/codec-lookup';
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { CodecLookup } from '@internal/framework-components/codec';
-import type { ExtensionPackRef } from '@internal/framework-components/components';
+import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
   SqlNamespaceBase,
   SqlNamespaceInput,
@@ -59,13 +59,11 @@ type SqliteScaffold<
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
 > = SqliteBaseScaffold<Extensions>;
 
-const targetWithoutCodecs = {};
-
 function createSqliteCodecLookup(
   extensions: Record<string, ExtensionPackRef<'sql', string>> | undefined,
 ): CodecLookup {
-  const extensionPacks = Object.values(extensions ?? {});
-  return assembleSqliteCodecRegistry(targetWithoutCodecs, extensionPacks);
+  const target: TargetPackRef<'sql', 'sqlite'> = sqlitePack;
+  return assembleSqliteCodecRegistry(target, Object.values(extensions ?? {}));
 }
 
 export function defineContract<

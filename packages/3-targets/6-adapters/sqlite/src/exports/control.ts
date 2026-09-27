@@ -38,7 +38,6 @@ export { parseSqliteDefault } from '@internal/target-sqlite/default-normalizer';
 export { normalizeSqliteNativeType } from '@internal/target-sqlite/native-type-normalizer';
 export { escapeLiteral, quoteIdentifier } from '@internal/target-sqlite/sql-utils';
 export {
-  assembleSqliteCodecRegistry,
   createSqliteBuiltinCodecLookup,
   createSqliteCodecRegistryWithBuiltins,
 } from '../core/codec-lookup';

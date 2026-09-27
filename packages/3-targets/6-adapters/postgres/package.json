@@ -62,6 +62,7 @@
   ],
   "exports": {
     "./adapter": "./dist/adapter.mjs",
+    "./codec-lookup": "./dist/codec-lookup.mjs",
     "./column-types": "./dist/column-types.mjs",
     "./control": "./dist/control.mjs",
     "./runtime": "./dist/runtime.mjs",

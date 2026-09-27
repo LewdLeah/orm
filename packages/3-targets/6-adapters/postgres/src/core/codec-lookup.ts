@@ -33,6 +33,15 @@ export function assemblePostgresCodecRegistry(
   return buildPostgresCodecRegistry(descriptors);
 }
 
+export function assemblePostgresCodecRegistryWithBuiltins(
+  extensions: ReadonlyArray<Pick<ComponentMetadata, 'types'>>,
+): PostgresCodecRegistry {
+  return buildPostgresCodecRegistry([
+    ...postgresCodecDescriptorRegistry.values(),
+    ...extensions.flatMap((extension) => extension.types?.codecTypes?.codecDescriptors ?? []),
+  ]);
+}
+
 export function createPostgresCodecRegistryWithBuiltins(
   codecDescriptors: readonly AnyPostgresCodecDescriptor[] = [],
 ): PostgresCodecRegistry {

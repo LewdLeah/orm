@@ -1,4 +1,4 @@
-import postgresAdapter, { assemblePostgresCodecRegistry } from '@internal/adapter-postgres/control';
+import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/adapter-postgres/codec-lookup';
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ExtensionPackRef } from '@internal/framework-components/components';
@@ -84,8 +84,7 @@ type PostgresScaffold<
 function createPostgresCodecLookup(
   extensions: Record<string, ExtensionPackRef<'sql', string>> | undefined,
 ): CodecLookup {
-  const extensionPacks = Object.values(extensions ?? {});
-  return assemblePostgresCodecRegistry([postgresAdapter, ...extensionPacks]);
+  return assemblePostgresCodecRegistryWithBuiltins(Object.values(extensions ?? {}));
 }
 
 export function defineContract<

@@ -38,7 +38,6 @@ export default postgresAdapterDescriptor;
 export { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 export { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
 export {
-  assemblePostgresCodecRegistry,
   createPostgresBuiltinCodecLookup,
   createPostgresCodecRegistryWithBuiltins,
 } from '../core/codec-lookup';
