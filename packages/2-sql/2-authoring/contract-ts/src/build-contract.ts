@@ -127,6 +127,15 @@ function columnCodec(
   );
 }
 
+function columnTypeParams(
+  descriptor: ColumnTypeDescriptor,
+  storageTypes: Record<string, StorageTypeInstance>,
+): Record<string, unknown> | undefined {
+  if (descriptor.typeParams !== undefined) return descriptor.typeParams;
+  if (descriptor.typeRef === undefined) return undefined;
+  return storageTypes[descriptor.typeRef]?.typeParams;
+}
+
 function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
   if (codec) {
     return codec.encodeJson(value);
@@ -143,6 +152,25 @@ interface ColumnDefaultSite {
   readonly codecId: string;
 }
 
+function defaultRefusal(site: ColumnDefaultSite, cause: unknown, elementNumber?: number) {
+  const subject = elementNumber === undefined ? 'default' : `default (element ${elementNumber})`;
+  const reason = cause instanceof Error ? cause.message : String(cause);
+  return contractError(
+    'CONTRACT.DEFAULT_INVALID',
+    `Field "${site.modelName}.${site.fieldName}" has a ${subject} that its codec refuses: ${reason}`,
+    {
+      cause,
+      meta: {
+        modelName: site.modelName,
+        fieldName: site.fieldName,
+        codecId: site.codecId,
+        reason: 'codec-refused-default',
+        ...ifDefined('element', elementNumber),
+      },
+    },
+  );
+}
+
 function encodeDefaultValue(
   value: unknown,
   codec: Codec | undefined,
@@ -152,28 +180,24 @@ function encodeDefaultValue(
   try {
     return encodeViaCodec(value, codec);
   } catch (cause) {
-    const subject = elementNumber === undefined ? 'default' : `default (element ${elementNumber})`;
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    throw contractError(
-      'CONTRACT.DEFAULT_INVALID',
-      `Field "${site.modelName}.${site.fieldName}" has a ${subject} that its codec "${site.codecId}" refuses: ${reason}`,
-      {
-        cause,
-        meta: {
-          modelName: site.modelName,
-          fieldName: site.fieldName,
-          codecId: site.codecId,
-          reason: 'codec-refused-default',
-          ...ifDefined('element', elementNumber),
-        },
-      },
-    );
+    throw defaultRefusal(site, cause, elementNumber);
+  }
+}
+
+function codecForDefault(
+  resolveCodec: () => Codec | undefined,
+  site: ColumnDefaultSite,
+): Codec | undefined {
+  try {
+    return resolveCodec();
+  } catch (cause) {
+    throw defaultRefusal(site, cause);
   }
 }
 
 function encodeColumnDefault(
   defaultInput: AuthoredColumnDefault,
-  codec: Codec | undefined,
+  resolveCodec: () => Codec | undefined,
   site: ColumnDefaultSite,
   many = false,
 ): ColumnDefault {
@@ -196,6 +220,7 @@ function encodeColumnDefault(
           'A scalar default on a list field must be rejected at the authoring surface.',
       );
     }
+    const codec = codecForDefault(resolveCodec, site);
     return {
       kind: 'literal',
       value: defaultInput.value.map((element, index) =>
@@ -205,7 +230,7 @@ function encodeColumnDefault(
   }
   return {
     kind: 'literal',
-    value: encodeDefaultValue(defaultInput.value, codec, site),
+    value: encodeDefaultValue(defaultInput.value, codecForDefault(resolveCodec, site), site),
   };
 }
 
@@ -748,12 +773,13 @@ function buildStorageColumn(
   field: FieldNode | ValueObjectFieldNode,
   storageValueSetRef: ValueSetRef | undefined,
   modelName: string,
+  storageTypes: Record<string, StorageTypeInstance>,
   codecLookup?: CodecLookup,
 ): StorageColumn {
   if (isValueObjectField(field)) {
     const encodedDefault =
       field.default !== undefined
-        ? encodeColumnDefault(field.default, codecLookup?.get(JSONB_CODEC_ID), {
+        ? encodeColumnDefault(field.default, () => codecLookup?.get(JSONB_CODEC_ID), {
             modelName,
             fieldName: field.fieldName,
             codecId: JSONB_CODEC_ID,
@@ -773,7 +799,7 @@ function buildStorageColumn(
     field.default !== undefined
       ? encodeColumnDefault(
           field.default,
-          columnCodec(codecId, field.descriptor.typeParams, codecLookup),
+          () => columnCodec(codecId, columnTypeParams(field.descriptor, storageTypes), codecLookup),
           { modelName, fieldName: field.fieldName, codecId },
           field.many === true,
         )
@@ -1174,6 +1200,7 @@ export function buildSqlContractFromDefinition(
         resolvedField,
         storageValueSetRef,
         semanticModel.modelName,
+        definition.storageTypes ?? {},
         codecLookup,
       );
       columns[field.columnName] = column;
