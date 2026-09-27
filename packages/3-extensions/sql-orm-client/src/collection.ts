@@ -2910,9 +2910,17 @@ export type Collection<
   Row = SimplifyDeep<InferRootRow<TContract, ModelName>>,
   State extends CollectionTypeState = DefaultCollectionTypeState,
 > = CollectionImpl<TContract, ModelName, Row, State> &
-  AggregateIncludeReducers<TContract, ModelName, State['nsId']> & {
-    readonly scopes: CollectionScopes<TContract, ModelName, Row, State>;
-  };
+  AggregateIncludeReducers<TContract, ModelName, State['nsId']> &
+  CollectionScopesMember<TContract, ModelName, Row, State>;
+
+export interface CollectionScopesMember<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  Row,
+  State extends CollectionTypeState,
+> {
+  readonly scopes: CollectionScopes<TContract, ModelName, Row, State>;
+}
 
 export type CollectionScopes<
   TContract extends Contract<SqlStorage>,
