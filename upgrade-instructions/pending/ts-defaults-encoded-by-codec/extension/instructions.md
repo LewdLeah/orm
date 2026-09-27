@@ -21,7 +21,7 @@ createdAt: field.dateTime().default('2024-01-01T00:00:00Z'),
 ```
 
 ```text
-CONTRACT.DEFAULT_INVALID: Field "Event.createdAt" has a default that its codec "pg/timestamptz-temporal@1" refuses: Codec 'pg/timestamptz-temporal@1' encodes a Temporal.Instant, but received a string.
+CONTRACT.DEFAULT_INVALID: Field "Event.createdAt" has a default that its codec refuses: Codec 'pg/timestamptz-temporal@1' encodes a Temporal.Instant, but received a string.
 ```
 
 1. Search your contract files for `.default(` with a literal argument.
@@ -36,9 +36,15 @@ CONTRACT.DEFAULT_INVALID: Field "Event.createdAt" has a default that its codec "
 
 Changing the preset changes the column's codec, and so the type your queries read and write for that field. On SQLite, `field.temporal.datetime()` takes a `Date`.
 
-The parameter type of `.default()` does not yet admit a `Temporal` value, so the third row needs a cast until that type is widened.
+A default the codec accepts can be stored in a different form than before:
 
-A default the codec accepts can be stored in a different form than before. For example a `Date` on `field.temporal.timestamptzJsDate()` is stored as its ISO 8601 text. Re-emit the contract and review the diff of `contract.json`.
+| Default | Stored before | Stored now |
+| --- | --- | --- |
+| `field.bigint().default(1)` (also SQLite `bigintColumn`) | `1` | `"1"` |
+| `field.bytes().default('x')` | `"x"` | `"eA=="` (base64) |
+| SQLite `blobColumn` with `.default('x')` | `"x"` | `"78"` (hex) |
+
+A contract with such a default emits a different `contract.json` and a different storage hash. Re-emit the contract and review the diff of `contract.json`.
 
 ### For extension authors
 
