@@ -84,6 +84,7 @@ import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import { isStructuredError, type StructuredError } from '@internal/utils/structured-error';
 import type {
   AuthoredColumnDefault,
   ContractDefinition,
@@ -142,7 +143,7 @@ function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
   }
   return blindCast<
     JsonValue,
-    'no codec lookup at build time: literal/enum member value is already JSON-safe'
+    'the build was given no codec for this value, so it is stored as authored; the caller answers for it being JSON'
   >(value);
 }
 
@@ -152,8 +153,13 @@ interface ColumnDefaultSite {
   readonly codecId: string;
 }
 
-function defaultRefusal(site: ColumnDefaultSite, cause: unknown, elementNumber?: number) {
-  const subject = elementNumber === undefined ? 'default' : `default (element ${elementNumber})`;
+function defaultRefusal(
+  site: ColumnDefaultSite,
+  cause: unknown,
+  elementPosition?: number,
+): StructuredError {
+  const subject =
+    elementPosition === undefined ? 'default' : `default (element ${elementPosition})`;
   const reason = cause instanceof Error ? cause.message : String(cause);
   return contractError(
     'CONTRACT.DEFAULT_INVALID',
@@ -165,7 +171,7 @@ function defaultRefusal(site: ColumnDefaultSite, cause: unknown, elementNumber?:
         fieldName: site.fieldName,
         codecId: site.codecId,
         reason: 'codec-refused-default',
-        ...ifDefined('element', elementNumber),
+        ...ifDefined('elementPosition', elementPosition),
       },
     },
   );
@@ -175,29 +181,69 @@ function encodeDefaultValue(
   value: unknown,
   codec: Codec | undefined,
   site: ColumnDefaultSite,
-  elementNumber?: number,
+  elementPosition?: number,
 ): JsonValue {
   try {
     return encodeViaCodec(value, codec);
   } catch (cause) {
-    throw defaultRefusal(site, cause, elementNumber);
+    if (cause instanceof InternalError) throw cause;
+    throw defaultRefusal(site, cause, elementPosition);
   }
 }
 
 function codecForDefault(
-  resolveCodec: () => Codec | undefined,
+  codecLookup: CodecLookup | undefined,
+  resolveCodec: (codecLookup: CodecLookup) => Codec | undefined,
+  site: ColumnDefaultSite,
+): Codec | undefined {
+  if (codecLookup === undefined) return undefined;
+  const codec = buildCodecForDefault(codecLookup, resolveCodec, site);
+  if (codec === undefined) {
+    throw contractError(
+      'CONTRACT.DEFAULT_INVALID',
+      `Field "${site.modelName}.${site.fieldName}" has a default, but no pack in the contract declares its codec "${site.codecId}", so the default cannot be checked. List the pack that owns the codec in \`extensions\`.`,
+      {
+        meta: {
+          modelName: site.modelName,
+          fieldName: site.fieldName,
+          codecId: site.codecId,
+          reason: 'codec-not-found',
+        },
+      },
+    );
+  }
+  return codec;
+}
+
+function buildCodecForDefault(
+  codecLookup: CodecLookup,
+  resolveCodec: (codecLookup: CodecLookup) => Codec | undefined,
   site: ColumnDefaultSite,
 ): Codec | undefined {
   try {
-    return resolveCodec();
+    return resolveCodec(codecLookup);
   } catch (cause) {
-    throw defaultRefusal(site, cause);
+    if (!isStructuredError(cause) || cause.code !== 'RUNTIME.TYPE_PARAMS_INVALID') throw cause;
+    throw contractError(
+      'CONTRACT.ARGUMENT_INVALID',
+      `Field "${site.modelName}.${site.fieldName}" has type parameters that its codec does not accept: ${cause.message}`,
+      {
+        cause,
+        meta: {
+          modelName: site.modelName,
+          fieldName: site.fieldName,
+          codecId: site.codecId,
+          reason: 'type-params-invalid',
+        },
+      },
+    );
   }
 }
 
 function encodeColumnDefault(
   defaultInput: AuthoredColumnDefault,
-  resolveCodec: () => Codec | undefined,
+  codecLookup: CodecLookup | undefined,
+  resolveCodec: (codecLookup: CodecLookup) => Codec | undefined,
   site: ColumnDefaultSite,
   many = false,
 ): ColumnDefault {
@@ -215,12 +261,20 @@ function encodeColumnDefault(
   }
   if (many) {
     if (!Array.isArray(defaultInput.value)) {
-      throw new InternalError(
-        `Literal default on a list column must be an array; received ${typeof defaultInput.value}. ` +
-          'A scalar default on a list field must be rejected at the authoring surface.',
+      throw contractError(
+        'CONTRACT.DEFAULT_INVALID',
+        `Field "${site.modelName}.${site.fieldName}" is a list field, so its default is an array; received ${typeof defaultInput.value}. Call .many() before .default().`,
+        {
+          meta: {
+            modelName: site.modelName,
+            fieldName: site.fieldName,
+            codecId: site.codecId,
+            reason: 'list-default-not-array',
+          },
+        },
       );
     }
-    const codec = codecForDefault(resolveCodec, site);
+    const codec = codecForDefault(codecLookup, resolveCodec, site);
     return {
       kind: 'literal',
       value: defaultInput.value.map((element, index) =>
@@ -230,7 +284,11 @@ function encodeColumnDefault(
   }
   return {
     kind: 'literal',
-    value: encodeDefaultValue(defaultInput.value, codecForDefault(resolveCodec, site), site),
+    value: encodeDefaultValue(
+      defaultInput.value,
+      codecForDefault(codecLookup, resolveCodec, site),
+      site,
+    ),
   };
 }
 
@@ -779,7 +837,7 @@ function buildStorageColumn(
   if (isValueObjectField(field)) {
     const encodedDefault =
       field.default !== undefined
-        ? encodeColumnDefault(field.default, () => codecLookup?.get(JSONB_CODEC_ID), {
+        ? encodeColumnDefault(field.default, codecLookup, (lookup) => lookup.get(JSONB_CODEC_ID), {
             modelName,
             fieldName: field.fieldName,
             codecId: JSONB_CODEC_ID,
@@ -799,7 +857,9 @@ function buildStorageColumn(
     field.default !== undefined
       ? encodeColumnDefault(
           field.default,
-          () => columnCodec(codecId, columnTypeParams(field.descriptor, storageTypes), codecLookup),
+          codecLookup,
+          (lookup) =>
+            columnCodec(codecId, columnTypeParams(field.descriptor, storageTypes), lookup),
           { modelName, fieldName: field.fieldName, codecId },
           field.many === true,
         )
