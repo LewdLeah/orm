@@ -148,7 +148,7 @@ type ArrayElementToken = { readonly value: string; readonly quoted: boolean };
  * outside double quotes; inside a quoted element a doubled quote (`""`) or a
  * backslash-escaped quote (`\"`) is a literal quote, and a backslash escapes the
  * next character. Returns undefined if the body is malformed (e.g. an unbalanced
- * quote).
+ * quote) or nests an array, which puts a brace outside quotes.
  */
 function splitArrayElements(inner: string): readonly ArrayElementToken[] | undefined {
   const tokens: ArrayElementToken[] = [];
@@ -183,6 +183,7 @@ function splitArrayElements(inner: string): readonly ArrayElementToken[] | undef
       quoted = true;
       continue;
     }
+    if (char === '{' || char === '}') return undefined;
     if (char === ',') {
       tokens.push({ value: current, quoted });
       current = '';
@@ -204,10 +205,10 @@ const BOOLEAN_FALSE_TOKEN_PATTERN = /^(?:f|false)$/i;
 /**
  * Reads an unquoted, non-NULL array element by the column's element type. Postgres quotes any
  * element containing whitespace, a comma, a brace, a quote or a backslash, so an unquoted token is
- * the element's text as is; a brace in one means a nested array, which is not read.
+ * the element's text as is.
  */
 function unquotedElementValue(token: string, elementType: string): JsonValue | undefined {
-  if (token === '' || token.includes('{') || token.includes('}')) return undefined;
+  if (token === '') return undefined;
   if (BOOLEAN_ELEMENT_TYPE_PATTERN.test(elementType)) {
     if (BOOLEAN_TRUE_TOKEN_PATTERN.test(token)) return true;
     if (BOOLEAN_FALSE_TOKEN_PATTERN.test(token)) return false;

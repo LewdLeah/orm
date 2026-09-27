@@ -100,6 +100,13 @@ describe('parsePostgresDefault array literals', () => {
     });
   });
 
+  it('fails closed for a multidimensional array body whose sub-arrays start and end quoted', () => {
+    expect(parsePostgresDefault('\'{{"a b","c d"}}\'::text[]', 'text[]')).toEqual({
+      kind: 'function',
+      expression: '\'{{"a b","c d"}}\'::text[]',
+    });
+  });
+
   it('fails closed for a multidimensional array body', () => {
     expect(parsePostgresDefault("'{{a,b},{c,d}}'::text[]", 'text[]')).toEqual({
       kind: 'function',
