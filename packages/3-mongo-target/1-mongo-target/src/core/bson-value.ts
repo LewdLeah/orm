@@ -28,9 +28,14 @@ function encodeRefused(received: string, path: string): never {
   );
 }
 
-function isWalked(value: object): boolean {
+function isPlainObject(value: object): boolean {
   const prototype = Object.getPrototypeOf(value);
-  return Array.isArray(value) || prototype === Object.prototype || prototype === null;
+  return prototype === Object.prototype || prototype === null;
+}
+
+function constructorName(value: object): string {
+  const name = Reflect.get(value, 'constructor')?.name;
+  return typeof name === 'string' && name !== '' ? name : 'object';
 }
 
 function assertBsonValue(value: unknown, path: string): void {
@@ -39,13 +44,28 @@ function assertBsonValue(value: unknown, path: string): void {
     if (!Number.isFinite(value)) encodeRefused(String(value), path);
     return;
   }
-  if (typeof value !== 'object') encodeRefused(typeof value, path);
+  if (typeof value !== 'object') {
+    encodeRefused(typeof value, path);
+    return;
+  }
   const tag = Reflect.get(value, '_bsontype');
   if (typeof tag === 'string') {
     if (!BSON_VALUE_TAGS.has(tag)) encodeRefused(tag, path);
     return;
   }
-  if (!isWalked(value)) return;
+  if (value instanceof Date || value instanceof RegExp || value instanceof Uint8Array) return;
+  if (Array.isArray(value) && Object.getPrototypeOf(value) === Array.prototype) {
+    for (let index = 0; index < value.length; index++) {
+      const at = child(path, String(index));
+      if (!(index in value)) encodeRefused('sparse array hole', at);
+      assertBsonValue(value[index], at);
+    }
+    return;
+  }
+  if (!isPlainObject(value)) {
+    encodeRefused(constructorName(value), path);
+    return;
+  }
   for (const [key, entry] of Object.entries(value)) {
     assertBsonValue(entry, child(path, key));
   }

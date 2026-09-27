@@ -75,6 +75,38 @@ describe('mongoBsonCodec encode', () => {
     ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
   });
 
+  it.each([
+    ['a native RegExp', /^a/i],
+    ['a Uint8Array', new Uint8Array([1, 2])],
+    ['a Buffer', Buffer.from([1, 2])],
+  ])('passes %s nested in an object and an array through unchanged', async (_, value) => {
+    const document = notBson({ outer: { items: [0, { value }] } });
+    expect(await mongoBsonCodec.encode(document, {})).toBe(document);
+  });
+
+  class Point {
+    constructor(readonly x: number) {}
+  }
+
+  it.each([
+    ['Map', new Map([['k', 1]])],
+    ['Set', new Set([1])],
+    ['Point', new Point(1)],
+    ['Int16Array', new Int16Array([1])],
+  ])('refuses a %s nested in an object and an array, naming the path', async (received, value) => {
+    await expect(
+      mongoBsonCodec.encode(notBson({ outer: { items: [0, { value }] } }), {}),
+    ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
+  });
+
+  it('refuses a hole in a sparse array', async () => {
+    const sparse: unknown[] = [1];
+    sparse[2] = 3;
+    await expect(mongoBsonCodec.encode(notBson({ list: sparse }), {})).rejects.toThrow(
+      encodeRefusal('sparse array hole', 'list.1'),
+    );
+  });
+
   it('says "the root" when the value itself is not BSON', async () => {
     await expect(mongoBsonCodec.encode(notBson(undefined), {})).rejects.toThrow(
       encodeRefusal('undefined', 'the root'),

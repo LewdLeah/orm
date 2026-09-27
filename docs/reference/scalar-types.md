@@ -21,7 +21,7 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 | `Bson` | `field.bson()` | `mongo/bson@1` | any BSON type; the validator does not constrain it | `BsonValue` |
 | — | `field.vector()` | `mongo/vector@1` | `vector` | `readonly number[]` |
 
-`Json` holds a JSON value and nothing else: writing or reading a `Date`, `ObjectId`, `Decimal128`, `Binary` or other non-JSON BSON value inside it fails with the path of the value. `Bson` holds any BSON value and reads it back as the driver produces it. `BsonValue` is exported from `@prisma/orm-mongo/target/codec-types`.
+`Json` holds a JSON value and nothing else: writing or reading a `Date`, `ObjectId`, `Decimal128`, `Binary` or other non-JSON BSON value inside it fails with the path of the value. `Bson` holds any BSON value and reads it back as the driver produces it; a write also accepts a native `RegExp` and a `Uint8Array` or `Buffer`, stored as BSON regex and binData, and refuses anything else outside `BsonValue` (a `Map`, `Set`, class instance, other typed array, or sparse-array hole) with its path. `BsonValue` and the write type `BsonInputValue` are exported from `@prisma/orm-mongo/target/codec-types`.
 
 The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`; they report `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
 

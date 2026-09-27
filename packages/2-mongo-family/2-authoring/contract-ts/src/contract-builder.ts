@@ -167,6 +167,13 @@ type BsonScalar =
 
 type BsonValue = BsonScalar | ReadonlyArray<BsonValue> | { readonly [key: string]: BsonValue };
 
+type BsonInputValue =
+  | BsonScalar
+  | RegExp
+  | Uint8Array
+  | ReadonlyArray<BsonInputValue>
+  | { readonly [key: string]: BsonInputValue };
+
 // This mirrors @internal/target-mongo/codec-types because authoring must stay decoupled from
 // the target layer while still exposing the built-in Mongo codec registry to type inference.
 type MongoCodecTypes = {
@@ -184,7 +191,7 @@ type MongoCodecTypes = {
   readonly 'mongo/decimal128@1': { readonly input: string; readonly output: string };
   readonly 'mongo/binary@1': { readonly input: Uint8Array; readonly output: Uint8Array };
   readonly 'mongo/json@1': { readonly input: JsonValue; readonly output: JsonValue };
-  readonly 'mongo/bson@1': { readonly input: BsonValue; readonly output: BsonValue };
+  readonly 'mongo/bson@1': { readonly input: BsonInputValue; readonly output: BsonValue };
 };
 
 type MergeExtensionCodecTypes<Packs extends Record<string, unknown>> = UnionToIntersection<

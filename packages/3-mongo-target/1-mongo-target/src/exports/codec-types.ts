@@ -30,6 +30,16 @@ export type BsonValue =
   | ReadonlyArray<BsonValue>
   | { readonly [key: string]: BsonValue };
 
+/**
+ * What a `Bson` field accepts on write: any `BsonValue`, and also a native `RegExp` and a `Uint8Array` or `Buffer`, which the driver writes as BSON regex and binData subtype 0.
+ */
+export type BsonInputValue =
+  | BsonScalar
+  | RegExp
+  | Uint8Array
+  | ReadonlyArray<BsonInputValue>
+  | { readonly [key: string]: BsonInputValue };
+
 export type CodecTypes = {
   readonly 'mongo/objectId@1': { readonly input: string; readonly output: string };
   readonly 'mongo/string@1': { readonly input: string; readonly output: string };
@@ -45,5 +55,5 @@ export type CodecTypes = {
   readonly 'mongo/decimal128@1': { readonly input: string; readonly output: string };
   readonly 'mongo/binary@1': { readonly input: Uint8Array; readonly output: Uint8Array };
   readonly 'mongo/json@1': { readonly input: JsonValue; readonly output: JsonValue };
-  readonly 'mongo/bson@1': { readonly input: BsonValue; readonly output: BsonValue };
+  readonly 'mongo/bson@1': { readonly input: BsonInputValue; readonly output: BsonValue };
 };
