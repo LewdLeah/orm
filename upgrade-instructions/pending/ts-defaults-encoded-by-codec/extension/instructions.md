@@ -38,6 +38,8 @@ Changing the preset changes the column's codec, and so the type your queries rea
 
 On Node 24 there is no global `Temporal`. A contract file that creates a `Temporal` value must load an implementation itself, for example with `import 'temporal-polyfill/full/global'` as its first import.
 
+A JavaScript `number` on a `bigint` field (codec `pg/int8@1`), such as `field.bigint().default(1)` inside the `defineContract` factory, is now a type error. Write a `bigint` literal: `field.bigint().default(1n)`. The stored value is the same digit text, `"1"`.
+
 A default the codec accepts can be stored in a different form than before:
 
 | Default | Stored before | Stored now |
