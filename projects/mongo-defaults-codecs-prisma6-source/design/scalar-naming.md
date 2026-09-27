@@ -151,19 +151,19 @@ Eight points § 5 left open, now fixed:
 10. **Objects the driver never produces** (`Map`, `Set`, class instances) are refused on decode with `RUNTIME.DECODE_FAILED` and named by their constructor in place of the `$type` alias, because dropping their contents would be silent data loss.
 11. **Enums over `Json`.** The enum entity factory reads `targetTypes[0]` as the member storage type; with the list it would resolve `@@type("mongo/json@1")` to `object`. An enum's codec must declare exactly one target type; the factory reports `Enum "<name>": codec "<id>" declares <n> storage types; an enum needs exactly one.` for zero or several. `Json` and `Bson` are therefore not enum codecs.
 12. **`Bson` encode of values outside `BsonValue`.** Encode additionally accepts a native `RegExp` (the driver serialises it as BSON regex) and a `Uint8Array` or `Buffer` (serialised as binData subtype 0), returning them unchanged; `BsonValue`'s input side includes both. Everything else outside the union (`Map`, `Set`, other class instances, sparse array holes, typed arrays other than `Uint8Array`) is refused on encode with `RUNTIME.ENCODE_FAILED`, the § 5.1 `<describe>`, and the path, because the driver would either throw or serialise them as empty documents.
-13. **`Bson` and the remaining BSON kinds.** `BsonScalar` widens to include `{ readonly _bsontype: 'Code'; readonly code: string; readonly scope?: { readonly [key: string]: BsonValue } | null }` (`null` because the driver's `Code` declares `scope` as possibly null), `{ readonly _bsontype: 'MinKey' }`, `{ readonly _bsontype: 'MaxKey' }`, and `{ readonly _bsontype: 'BSONSymbol'; valueOf(): string }`, so the union covers every value the driver can hand back except `DBRef`; encode accepts these four as well. `Bson` decode rebuilds a `DBRef` into its document form `{ $ref, $id[, $db], ...fields }` exactly as § 5.1 point 9 does for `Json`, so no `DBRef` instance ever reaches the application from either codec; the members keep their BSON types (an `ObjectId` in `$id` stays an `ObjectId`). `Bson` encode of a plain `{ $ref, $id }` document therefore round-trips to the same document. The excluded kinds are exactly `undefined`, `bigint`, `symbol`, functions, and `DBRef` instances, all named in the encode refusal list.
+13. **`Bson` and the remaining BSON kinds.** `BsonScalar` widens to include `{ readonly _bsontype: 'Code'; readonly code: string; readonly scope?: { readonly [key: string]: BsonValue } | null }` (`null` because the driver's `Code` declares `scope` as possibly null), `{ readonly _bsontype: 'MinKey' }`, `{ readonly _bsontype: 'MaxKey' }`, and `{ readonly _bsontype: 'BSONSymbol'; valueOf(): string }`, so the union covers every value the driver can hand back except `DBRef` (a stored regex comes back as a native `RegExp`, which is in the union); encode accepts these four as well. `Bson` decode rebuilds a `DBRef` into its document form `{ $ref, $id[, $db], ...fields }` exactly as § 5.1 point 9 does for `Json`, so no `DBRef` instance ever reaches the application from either codec; the members keep their BSON types (an `ObjectId` in `$id` stays an `ObjectId`). `Bson` encode of a plain `{ $ref, $id }` document therefore round-trips to the same document. The excluded kinds are exactly `undefined`, `bigint`, `symbol`, functions, and `DBRef` instances, all named in the encode refusal list.
 
 ## 6. `Bson` on Mongo, exact specification
 
 A new scalar for "any BSON value", the only Mongo type whose validator does not constrain the value.
 
-- **Token** `bson`; codec id `mongo/bson@1`; data type `mongo/bson`; PSL `Bson`; TS `field.bson()`; `CodecTypes['mongo/bson@1']` input and output `BsonValue`.
+- **Token** `bson`; codec id `mongo/bson@1`; data type `mongo/bson`; PSL `Bson`; TS `field.bson()`; `CodecTypes['mongo/bson@1']` input `BsonInputValue`, output `BsonValue`.
 - **`targetTypes`:** `[]`; the validator derivation gives `{}` (or `{ bsonType: 'array', items: {} }` for a list), exactly the mechanism slice 1 built for a known codec with no BSON type. The canonicalisation rule that keeps empty objects under `properties` and `items` stays.
 - **Application type `BsonValue`**, declared in `packages/3-mongo-target/1-mongo-target/src/exports/codec-types.ts` and duplicated in the Mongo TS builder's local map as the other types are, structural because values come from the driver's own copy of `bson`:
 
 ```ts
 export type BsonScalar =
-  | string | number | boolean | null | Date
+  | string | number | boolean | null | Date | RegExp
   | { readonly _bsontype: 'ObjectId'; toHexString(): string }
   | { readonly _bsontype: 'Long'; toBigInt(): bigint }
   | { readonly _bsontype: 'Decimal128'; toString(): string }
@@ -171,13 +171,18 @@ export type BsonScalar =
   | { readonly _bsontype: 'BSONRegExp'; readonly pattern: string; readonly options: string }
   | { readonly _bsontype: 'Timestamp'; toBigInt(): bigint }
   | { readonly _bsontype: 'Int32'; valueOf(): number }
-  | { readonly _bsontype: 'Double'; valueOf(): number };
+  | { readonly _bsontype: 'Double'; valueOf(): number }
+  | { readonly _bsontype: 'Code'; readonly code: string; readonly scope?: { readonly [key: string]: BsonValue } | null }
+  | { readonly _bsontype: 'MinKey' }
+  | { readonly _bsontype: 'MaxKey' }
+  | { readonly _bsontype: 'BSONSymbol'; valueOf(): string };
 export type BsonValue = BsonScalar | ReadonlyArray<BsonValue> | { readonly [key: string]: BsonValue };
+export type BsonInputValue = BsonValue | Uint8Array | ReadonlyArray<BsonInputValue> | { readonly [key: string]: BsonInputValue };
 ```
 
-  `undefined`, `bigint`, `symbol`, functions, `Code`, `DBRef`, `MinKey`, `MaxKey`, and `Symbol` are not part of `BsonValue`.
-- **Encode:** accepts any `BsonValue` and returns it unchanged; refuses with `RUNTIME.ENCODE_FAILED` (message `mongo/bson@1 value must be a BSON value; received <describe> at <path>`) `undefined`, `bigint`, `symbol`, function, non-finite number, and any object with a `_bsontype` not in the list above, at any depth.
-- **Decode:** returns the wire value unchanged (the driver has already produced BSON values); refuses nothing. A `long` promoted to `number` by the driver is returned as that `number`.
+  `undefined`, `bigint`, `symbol`, functions, and `DBRef` instances are not part of `BsonValue`. A stored regex reads back as a native `RegExp` (the driver deserialises with `bsonRegExp: false`), so `RegExp` is on the read side; `BSONRegExp` appears only when a driver is configured otherwise. `Uint8Array` is write-only (`Binary` is what reads back). `CodecTypes['mongo/bson@1']` is `{ input: BsonInputValue; output: BsonValue }`.
+- **Encode:** accepts any `BsonInputValue` and returns it unchanged; refuses with `RUNTIME.ENCODE_FAILED` (message `mongo/bson@1 value must be a BSON value; received <describe> at <path>`) `undefined`, `bigint`, `symbol`, function, non-finite number, `DBRef` instances, any object with a `_bsontype` not in the list above, and any other non-plain object (`Map`, `Set`, class instances, typed arrays other than `Uint8Array`, sparse holes), at any depth (§ 5.1 points 12 and 13).
+- **Decode:** returns the wire value unchanged except that a `DBRef` at any depth is rebuilt into `{ $ref, $id[, $db], ...fields }` with member types kept (§ 5.1 point 13); refuses nothing. A `long` promoted to `number` by the driver is returned as that `number`.
 - **JSON form:** MongoDB Extended JSON v2, canonical mode: `encodeJson` is `EJSON.serialize(value, { relaxed: false })` and `decodeJson` is `EJSON.deserialize(json, { relaxed: false })`, both from the `bson` package the target already depends on. This is deterministic and round-trips every `BsonValue`.
 - **Traits:** none. `renderValueLiteral`: none. `renderOutputType`: none.
 - **Prisma 6 reader:** unchanged; Prisma 6 has no equivalent.
