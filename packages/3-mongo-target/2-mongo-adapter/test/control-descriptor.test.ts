@@ -29,6 +29,7 @@ describe('mongoScalarAuthoringTypes', () => {
       [
         ...expectedScalars.map(([name]) => name),
         'Json',
+        'Bson',
         ...deprecatedAliases.map(([name]) => name),
       ].sort(),
     );
@@ -67,6 +68,15 @@ describe('mongoScalarAuthoringTypes', () => {
       kind: 'typeConstructor',
       documentation: expect.stringContaining('the collection validator admits only those types'),
       output: { codecId: 'mongo/json@1', nativeType: 'json' },
+    });
+  });
+
+  it('pins Bson, whose codec declares no BSON type, to the bson native type', () => {
+    expect(mongoDescriptorById('mongo/bson@1')?.targetTypes).toEqual([]);
+    expect(mongoScalarAuthoringTypes['Bson']).toEqual({
+      kind: 'typeConstructor',
+      documentation: expect.stringContaining('the collection validator does not constrain it'),
+      output: { codecId: 'mongo/bson@1', nativeType: 'bson' },
     });
   });
 

@@ -150,6 +150,23 @@ export type ExtractCodecTypesFromPack<P> = P extends { __codecTypes?: infer Code
     : Record<string, never>
   : Record<string, never>;
 
+type BsonScalar =
+  | string
+  | number
+  | boolean
+  | null
+  | Date
+  | { readonly _bsontype: 'ObjectId'; toHexString(): string }
+  | { readonly _bsontype: 'Long'; toBigInt(): bigint }
+  | { readonly _bsontype: 'Decimal128'; toString(): string }
+  | { readonly _bsontype: 'Binary'; value(): Uint8Array; readonly sub_type: number }
+  | { readonly _bsontype: 'BSONRegExp'; readonly pattern: string; readonly options: string }
+  | { readonly _bsontype: 'Timestamp'; toBigInt(): bigint }
+  | { readonly _bsontype: 'Int32'; valueOf(): number }
+  | { readonly _bsontype: 'Double'; valueOf(): number };
+
+type BsonValue = BsonScalar | ReadonlyArray<BsonValue> | { readonly [key: string]: BsonValue };
+
 // This mirrors @internal/target-mongo/codec-types because authoring must stay decoupled from
 // the target layer while still exposing the built-in Mongo codec registry to type inference.
 type MongoCodecTypes = {
@@ -167,6 +184,7 @@ type MongoCodecTypes = {
   readonly 'mongo/decimal128@1': { readonly input: string; readonly output: string };
   readonly 'mongo/binary@1': { readonly input: Uint8Array; readonly output: Uint8Array };
   readonly 'mongo/json@1': { readonly input: JsonValue; readonly output: JsonValue };
+  readonly 'mongo/bson@1': { readonly input: BsonValue; readonly output: BsonValue };
 };
 
 type MergeExtensionCodecTypes<Packs extends Record<string, unknown>> = UnionToIntersection<
@@ -1262,6 +1280,9 @@ export const field = {
   },
   json() {
     return createScalarFieldBuilder('mongo/json@1');
+  },
+  bson() {
+    return createScalarFieldBuilder('mongo/bson@1');
   },
   vector<const TypeParams extends Record<string, unknown> | undefined = undefined>(options?: {
     readonly typeParams?: TypeParams;

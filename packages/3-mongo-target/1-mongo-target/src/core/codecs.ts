@@ -9,7 +9,7 @@ import {
 } from '@internal/mongo-codec';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { type Binary, type Decimal128, type Long, ObjectId } from 'bson';
+import { type Binary, type Decimal128, type Document, EJSON, type Long, ObjectId } from 'bson';
 import {
   binaryDecode,
   binaryDecodeJson,
@@ -25,9 +25,11 @@ import {
   int64Encode,
   int64EncodeJson,
 } from './bson-scalar-helpers';
+import { encodeBsonValue } from './bson-value';
 import {
   MONGO_BINARY_CODEC_ID,
   MONGO_BOOLEAN_CODEC_ID,
+  MONGO_BSON_CODEC_ID,
   MONGO_DATE_CODEC_ID,
   MONGO_DECIMAL128_CODEC_ID,
   MONGO_DOUBLE_CODEC_ID,
@@ -41,6 +43,7 @@ import {
 import {
   mongoBinary,
   mongoBool,
+  mongoBson,
   mongoDate,
   mongoDecimal128,
   mongoDouble,
@@ -148,6 +151,25 @@ export const mongoJsonCodec = mongoCodec({
 });
 
 /**
+ * Any BSON value, passed through unchanged. The application type is `BsonValue` in `CodecTypes`; the codec is typed `unknown` so this module's declarations do not pull `codec-types` into a shared chunk. Its JSON form is canonical MongoDB Extended JSON v2, which round-trips every BSON type.
+ */
+export const mongoBsonCodec = mongoCodec({
+  typeId: MONGO_BSON_CODEC_ID,
+  decode: (wire: unknown) => wire,
+  encode: (value: unknown) => encodeBsonValue(value),
+  encodeJson: (value: unknown) =>
+    blindCast<JsonValue, 'canonical Extended JSON is plain JSON'>(
+      EJSON.serialize(blindCast<Document, 'EJSON serializes any BSON value'>(value), {
+        relaxed: false,
+      }),
+    ),
+  decodeJson: (json) =>
+    EJSON.deserialize(blindCast<Document, 'canonical Extended JSON is a document'>(json), {
+      relaxed: false,
+    }),
+});
+
+/**
  * The canonical set of Mongo wire-type codecs.
  *
  * Single source of truth for both control- and runtime-plane adapter descriptors. Don't duplicate this list — import it.
@@ -164,6 +186,7 @@ export const mongoStandardCodecs = [
   mongoDecimal128Codec,
   mongoBinaryCodec,
   mongoJsonCodec,
+  mongoBsonCodec,
 ] as const;
 
 /**
@@ -286,6 +309,11 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
     dataType: mongoJson.id,
     traits: [],
     targetTypes: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
+  }),
+  descriptorFor(mongoBsonCodec, {
+    dataType: mongoBson.id,
+    traits: [],
+    targetTypes: [],
   }),
 ];
 

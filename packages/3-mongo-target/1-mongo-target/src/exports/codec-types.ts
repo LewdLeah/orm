@@ -4,6 +4,32 @@ export type Vector<N extends number = number> = readonly number[] & {
   readonly __vectorLength?: N;
 };
 
+/**
+ * A BSON scalar as the driver reads it. Structural, because values come from the driver's own copy of `bson`, not the classes this package imports.
+ */
+export type BsonScalar =
+  | string
+  | number
+  | boolean
+  | null
+  | Date
+  | { readonly _bsontype: 'ObjectId'; toHexString(): string }
+  | { readonly _bsontype: 'Long'; toBigInt(): bigint }
+  | { readonly _bsontype: 'Decimal128'; toString(): string }
+  | { readonly _bsontype: 'Binary'; value(): Uint8Array; readonly sub_type: number }
+  | { readonly _bsontype: 'BSONRegExp'; readonly pattern: string; readonly options: string }
+  | { readonly _bsontype: 'Timestamp'; toBigInt(): bigint }
+  | { readonly _bsontype: 'Int32'; valueOf(): number }
+  | { readonly _bsontype: 'Double'; valueOf(): number };
+
+/**
+ * Any BSON value: a scalar, an array of values, or a document of values.
+ */
+export type BsonValue =
+  | BsonScalar
+  | ReadonlyArray<BsonValue>
+  | { readonly [key: string]: BsonValue };
+
 export type CodecTypes = {
   readonly 'mongo/objectId@1': { readonly input: string; readonly output: string };
   readonly 'mongo/string@1': { readonly input: string; readonly output: string };
@@ -19,4 +45,5 @@ export type CodecTypes = {
   readonly 'mongo/decimal128@1': { readonly input: string; readonly output: string };
   readonly 'mongo/binary@1': { readonly input: Uint8Array; readonly output: Uint8Array };
   readonly 'mongo/json@1': { readonly input: JsonValue; readonly output: JsonValue };
+  readonly 'mongo/bson@1': { readonly input: BsonValue; readonly output: BsonValue };
 };

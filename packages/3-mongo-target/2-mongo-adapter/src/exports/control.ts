@@ -4,6 +4,7 @@ import type { MongoControlDriverInstance } from '@internal/mongo-lowering';
 import {
   MONGO_BINARY_CODEC_ID,
   MONGO_BOOLEAN_CODEC_ID,
+  MONGO_BSON_CODEC_ID,
   MONGO_DATE_CODEC_ID,
   MONGO_DECIMAL128_CODEC_ID,
   MONGO_DOUBLE_CODEC_ID,
@@ -82,6 +83,12 @@ export const mongoScalarAuthoringTypes = {
     documentation:
       'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types.',
     output: { codecId: MONGO_JSON_CODEC_ID, nativeType: 'json' },
+  },
+  Bson: {
+    kind: 'typeConstructor',
+    documentation:
+      'Any BSON value, read as BsonValue; the collection validator does not constrain it.',
+    output: { codecId: MONGO_BSON_CODEC_ID, nativeType: 'bson' },
   },
   Int: {
     kind: 'typeConstructor',
