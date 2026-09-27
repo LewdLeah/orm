@@ -18,6 +18,8 @@ const mongoTargetTypes: Record<string, readonly string[]> = {
   'mongo/decimal128@1': ['decimal'],
   'mongo/binary@1': ['binData'],
   'mongo/json@1': [],
+  'test/int-or-long@1': ['int', 'long'],
+  'test/number-or-null@1': ['null', 'int'],
 };
 
 const mongoCodecLookup: CodecLookup = {
@@ -118,6 +120,48 @@ describe('deriveJsonSchema', () => {
         notes: {},
       },
       additionalProperties: false,
+    });
+  });
+
+  describe('a codec with several BSON types', () => {
+    it('lists every type for a required field', () => {
+      const result = deriveJsonSchema(
+        { count: scalarField('test/int-or-long@1') },
+        undefined,
+        mongoCodecLookup,
+      );
+      expect(result.jsonSchema['properties']).toEqual({ count: { bsonType: ['int', 'long'] } });
+    });
+
+    it('prepends null for a nullable field', () => {
+      const result = deriveJsonSchema(
+        { count: scalarField('test/int-or-long@1', true) },
+        undefined,
+        mongoCodecLookup,
+      );
+      expect(result.jsonSchema['properties']).toEqual({
+        count: { bsonType: ['null', 'int', 'long'] },
+      });
+    });
+
+    it('does not repeat null for a nullable field whose types already include it', () => {
+      const result = deriveJsonSchema(
+        { count: scalarField('test/number-or-null@1', true) },
+        undefined,
+        mongoCodecLookup,
+      );
+      expect(result.jsonSchema['properties']).toEqual({ count: { bsonType: ['null', 'int'] } });
+    });
+
+    it('lists every type for the items of a list field', () => {
+      const result = deriveJsonSchema(
+        { counts: arrayField('test/int-or-long@1') },
+        undefined,
+        mongoCodecLookup,
+      );
+      expect(result.jsonSchema['properties']).toEqual({
+        counts: { bsonType: 'array', items: { bsonType: ['int', 'long'] } },
+      });
     });
   });
 
