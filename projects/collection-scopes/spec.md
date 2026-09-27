@@ -21,8 +21,13 @@ model Post {
 
 ```ts
 const q = websearchToTsquery(input);
+
+// short form: the scope sits directly on the collection when no member has its name
+db.Post.search.fulltext(q).limit(10).all();
+db.User.where({ id }).include('posts', (posts) => posts.search.fulltext(q).limit(3));
+
+// full form: always available, whatever the scope is called
 db.Post.scopes.search.fulltext(q).limit(10).all();
-db.User.where({ id }).include('posts', (posts) => posts.scopes.search.fulltext(q).limit(3));
 ```
 
 ## Where things stand (grounded 2026-09-27)

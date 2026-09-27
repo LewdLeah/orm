@@ -30,21 +30,19 @@ import { websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
 const q = websearchToTsquery(input);
 
 // best matches first
-db.Post.scopes.search.fulltext(q).limit(10).all();
-
-// the same scope, reached directly because no collection member is named `search`
 db.Post.search.fulltext(q).limit(10).all();
 
 // chained after other refinements, and ordered explicitly
 db.Post.where((p) => p.userId.eq(userId))
-  .scopes.search.fulltext(q)
+  .search.fulltext(q)
   .orderBy((p) => p.id.desc())
   .all();
 
 // inside an include: this user, with their three most relevant posts
-db.User.where({ id: userId }).include('posts', (posts) =>
-  posts.scopes.search.fulltext(q).limit(3),
-);
+db.User.where({ id: userId }).include('posts', (posts) => posts.search.fulltext(q).limit(3));
+
+// the full form, always available whatever the scope is called
+db.Post.scopes.search.fulltext(q).limit(10).all();
 ```
 
 On Postgres the first query lowers to a match against the indexed expression, ordered by rank:
