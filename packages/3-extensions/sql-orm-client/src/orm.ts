@@ -8,7 +8,6 @@ import { blindCast } from '@internal/utils/casts';
 import { aggregateOperationNames } from './aggregate-operations';
 import { type Collection, CollectionBase, reservedCollectionMemberNames } from './collection';
 import { ormError } from './orm-errors';
-import type { AnyScopeContribution, ScopeNamesOfIndexes, ScopesOfIndexes } from './scopes';
 import { domainModelNamesInNamespace, domainModelTableInNamespace } from './storage-resolution';
 import type {
   CollectionContext,
@@ -16,21 +15,17 @@ import type {
   CollectionTypeState,
   DefaultCollectionTypeState,
   InferRootRow,
-  ModelTableIndexes,
   RuntimeQueryable,
   WithNsId,
-  WithScopeContributions,
 } from './types';
 
 export interface OrmOptions<
   TContract extends Contract<SqlStorage>,
   Collections extends Partial<Record<string, AnyCollectionClass>>,
-  Scopes extends readonly AnyScopeContribution[] = readonly [],
 > {
   readonly runtime: RuntimeQueryable;
   readonly collections?: Collections;
   readonly context: ExecutionContext<TContract>;
-  readonly scopes?: Scopes;
 }
 
 type ModelNames<TContract extends Contract<SqlStorage>> = CollectionModelName<TContract>;
@@ -55,48 +50,14 @@ type ModelCollection<
   Collections extends Partial<Record<string, AnyCollectionClass>>,
   NsId extends string,
   ModelName extends ModelNames<TContract>,
-  Scopes extends readonly AnyScopeContribution[],
 > = [CustomCollectionForKey<Collections, ModelName>] extends [never]
   ? Collection<
       TContract,
       ModelName,
       InferRootRow<TContract, ModelName, NsId>,
-      WithScopeContributions<WithNsId<DefaultCollectionTypeState, NsId>, Scopes>
+      WithNsId<DefaultCollectionTypeState, NsId>
     >
-  : CustomCollectionWithScopes<
-      TContract,
-      ModelName,
-      NsId,
-      Scopes,
-      CustomCollectionForKey<Collections, ModelName>
-    >;
-
-type CustomCollectionScopes<
-  TContract extends Contract<SqlStorage>,
-  ModelName extends string,
-  NsId extends string,
-  Scopes extends readonly AnyScopeContribution[],
-  Custom,
-> = ScopesOfIndexes<
-  ModelTableIndexes<TContract, ModelName, NsId>,
-  Scopes,
-  CustomCollectionWithScopes<TContract, ModelName, NsId, Scopes, Custom>
->;
-
-export type CustomCollectionWithScopes<
-  TContract extends Contract<SqlStorage>,
-  ModelName extends string,
-  NsId extends string,
-  Scopes extends readonly AnyScopeContribution[],
-  Custom,
-> = Custom & {
-  readonly scopes: CustomCollectionScopes<TContract, ModelName, NsId, Scopes, Custom>;
-} & {
-  readonly [K in Exclude<
-    ScopeNamesOfIndexes<ModelTableIndexes<TContract, ModelName, NsId>, Scopes>,
-    keyof Custom
-  >]: CustomCollectionScopes<TContract, ModelName, NsId, Scopes, Custom>[K];
-};
+  : CustomCollectionForKey<Collections, ModelName>;
 
 type NamespaceModelNames<
   TContract extends Contract<SqlStorage>,
@@ -111,30 +72,26 @@ export type OrmNamespace<
   TContract extends Contract<SqlStorage>,
   Collections extends Partial<Record<string, AnyCollectionClass>>,
   NsId extends keyof TContract['domain']['namespaces'],
-  Scopes extends readonly AnyScopeContribution[] = readonly [],
 > = {
   [K in NamespaceModelNames<TContract, NsId>]: ModelCollection<
     TContract,
     Collections,
     NsId & string,
-    K,
-    Scopes
+    K
   >;
 };
 
 type NamespacedClientMap<
   TContract extends Contract<SqlStorage>,
   Collections extends Partial<Record<string, AnyCollectionClass>>,
-  Scopes extends readonly AnyScopeContribution[],
 > = {
-  [Ns in keyof TContract['domain']['namespaces']]: OrmNamespace<TContract, Collections, Ns, Scopes>;
+  [Ns in keyof TContract['domain']['namespaces']]: OrmNamespace<TContract, Collections, Ns>;
 };
 
 type OrmClient<
   TContract extends Contract<SqlStorage>,
   Collections extends Partial<Record<string, AnyCollectionClass>>,
-  Scopes extends readonly AnyScopeContribution[] = readonly [],
-> = NamespacedClientMap<TContract, Collections, Scopes>;
+> = NamespacedClientMap<TContract, Collections>;
 
 /**
  * Reject a contributed aggregate operation whose name a collection member
@@ -161,19 +118,38 @@ function assertAggregateOperationsNotReserved(registry: SqlAggregateDescriptorRe
   }
 }
 
+function assertRequiredScopeContributionsProvided(
+  contract: Contract<SqlStorage>,
+  contributions: ReadonlyArray<{ readonly id: string }>,
+): void {
+  const provided = new Set(contributions.map((contribution) => contribution.id));
+  for (const [namespaceId, namespace] of Object.entries(contract.storage.namespaces)) {
+    for (const [tableName, table] of Object.entries(namespace.entries.table ?? {})) {
+      for (const index of table.indexes ?? []) {
+        const required = index.options?.['requiresScopes'];
+        if (!Array.isArray(required)) continue;
+        for (const id of required) {
+          if (provided.has(id)) continue;
+          throw ormError(
+            'ORM.ARGUMENT_INVALID',
+            `Index '${index.name}' on table '${namespaceId}.${tableName}' needs the collection scope contribution '${id}', but no component passed to the client provides it. Pass the extension that declares '${id}' in \`extensions\`.`,
+            { meta: { method: 'orm', argument: 'context', key: id } },
+          );
+        }
+      }
+    }
+  }
+}
+
 export function orm<
   TContract extends Contract<SqlStorage>,
   Collections extends Partial<Record<string, AnyCollectionClass>> = Record<never, never>,
-  const Scopes extends readonly AnyScopeContribution[] = readonly [],
->(options: OrmOptions<TContract, Collections, Scopes>): OrmClient<TContract, Collections, Scopes> {
+>(options: OrmOptions<TContract, Collections>): OrmClient<TContract, Collections> {
   const { runtime, collections, context } = options;
   assertAggregateOperationsNotReserved(context.aggregateDescriptors);
   const contract = context.contract;
-  const ctx: CollectionContext<TContract> = {
-    runtime,
-    context,
-    scopeContributions: options.scopes ?? [],
-  };
+  assertRequiredScopeContributionsProvided(contract, context.collectionScopes ?? []);
+  const ctx: CollectionContext<TContract> = { runtime, context };
   const collectionRegistry = createCollectionRegistry(contract, collections);
 
   type AnyCollection = Collection<TContract, string, unknown, CollectionTypeState>;
@@ -236,7 +212,7 @@ export function orm<
     return facet;
   }
 
-  return new Proxy({} as OrmClient<TContract, Collections, Scopes>, {
+  return new Proxy({} as OrmClient<TContract, Collections>, {
     get(_target, prop: string | symbol): unknown {
       if (typeof prop !== 'string') {
         return undefined;

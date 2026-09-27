@@ -1,6 +1,7 @@
 import type { SqlRuntimeExtensionDescriptor } from '@internal/sql-runtime';
 import { pgvectorPackMeta, pgvectorQueryOperations } from '../core/descriptor-meta';
 import { pgvectorCodecRegistry } from '../core/registry';
+import { spikeExtensionScopes } from '../core/spike-scope';
 
 const pgvectorRuntimeDescriptor: SqlRuntimeExtensionDescriptor<'postgres'> = {
   kind: 'extension' as const,
@@ -16,6 +17,7 @@ const pgvectorRuntimeDescriptor: SqlRuntimeExtensionDescriptor<'postgres'> = {
   },
   codecs: () => Array.from(pgvectorCodecRegistry.values()),
   queryOperations: () => pgvectorQueryOperations(),
+  collectionScopes: () => [spikeExtensionScopes],
   create() {
     return {
       familyId: 'sql' as const,
@@ -26,3 +28,4 @@ const pgvectorRuntimeDescriptor: SqlRuntimeExtensionDescriptor<'postgres'> = {
 
 export { pgvectorCodecRegistry };
 export default pgvectorRuntimeDescriptor;
+export type { SpikeExtensionOperations, SpikeExtensionScope } from '../core/spike-scope';

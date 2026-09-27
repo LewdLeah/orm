@@ -55,6 +55,7 @@ import type {
   CodecDescriptorRegistry,
   ExecutionContext,
   MutationDefaultsOptions,
+  SqlCollectionScopeContribution,
   TypeHelperRegistry,
 } from '@internal/sql-relational-core/query-lane-context';
 import { createAstCodecResolver } from './codecs/ast-codec-resolver';
@@ -78,6 +79,7 @@ export interface SqlStaticContributions {
   readonly codecs: () => ReadonlyArray<AnyCodecDescriptor>;
   readonly queryOperations?: () => SqlOperationDescriptors;
   readonly mutationDefaultGenerators?: () => ReadonlyArray<RuntimeMutationDefaultGenerator>;
+  readonly collectionScopes?: () => ReadonlyArray<SqlCollectionScopeContribution>;
 }
 
 /**
@@ -837,6 +839,7 @@ export function createExecutionContext<
     contractCodecs,
     codecDescriptors,
     aggregateDescriptors,
+    collectionScopes: contributors.flatMap((contributor) => contributor.collectionScopes?.() ?? []),
     queryOperations: queryOperationRegistry,
     types,
     applyMutationDefaults: (options) =>

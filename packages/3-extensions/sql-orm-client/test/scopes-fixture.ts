@@ -1,5 +1,6 @@
 import { BinaryExpr, ColumnRef, LiteralExpr, OrderByItem } from '@internal/sql-relational-core/ast';
-import { defineCollectionScopes, type ScopeOperationsShape } from '../src/scopes';
+import type { SqlCollectionScopeContribution } from '@internal/sql-relational-core/query-lane-context';
+import type { ScopeOperationsShape } from '../src/scopes';
 import type { TestContract } from './helpers';
 
 type ReplaceKey<T, K extends keyof T, V> = Omit<T, K> & { readonly [P in K]: V };
@@ -113,10 +114,19 @@ interface FullTextOperations<Index, Coll> {
 }
 
 interface FullTextScope extends ScopeOperationsShape {
+  readonly match: FullTextIndexMatch;
   readonly operations: FullTextOperations<this['index'], this['collection']>;
 }
 
-export const fullTextScopes = defineCollectionScopes<FullTextIndexMatch, FullTextScope>({
+declare module '../src/scopes' {
+  interface CollectionScopeRegistry {
+    readonly 'test/fulltext': FullTextScope;
+    readonly 'test/brin': BrinScope;
+  }
+}
+
+export const fullTextScopes: SqlCollectionScopeContribution = {
+  id: 'test/fulltext',
   matches: (index) => index['type'] === 'gin' && typeof index['options'] === 'object',
   operations: (index, context) => {
     const options = index['options'] as {
@@ -135,17 +145,19 @@ export const fullTextScopes = defineCollectionScopes<FullTextIndexMatch, FullTex
       })) as never,
     };
   },
-});
+};
 
 interface BrinOperations<Coll> {
   between(low: number, high: number): Coll;
 }
 
 interface BrinScope extends ScopeOperationsShape {
+  readonly match: { readonly type: 'brin' };
   readonly operations: BrinOperations<this['collection']>;
 }
 
-export const brinScopes = defineCollectionScopes<{ readonly type: 'brin' }, BrinScope>({
+export const brinScopes: SqlCollectionScopeContribution = {
+  id: 'test/brin',
   matches: (index) => index['type'] === 'brin',
   operations: (index, context) => {
     const column = ColumnRef.of(context.tableName, (index['columns'] as string[])[0] ?? 'id');
@@ -155,4 +167,4 @@ export const brinScopes = defineCollectionScopes<{ readonly type: 'brin' }, Brin
       })) as never,
     };
   },
-});
+};

@@ -12,13 +12,9 @@ export {
   prepareQuery,
 } from '../prepared-row-query';
 export type {
-  AnyScopeContribution,
-  CollectionScopeContribution,
-  ScopeOperationContext,
+  CollectionScopeRegistry,
   ScopeOperationsShape,
-  ScopeRefinement,
 } from '../scopes';
-export { defineCollectionScopes } from '../scopes';
 export type {
   AggregateBuilder,
   AggregateResult,

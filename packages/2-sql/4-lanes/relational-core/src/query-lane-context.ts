@@ -5,6 +5,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlOperationRegistry } from '@internal/sql-operations';
 import type { SqlAggregateDescriptor, SqlAggregateLowering } from './aggregate-descriptor';
 import type { ContractCodecRegistry } from './ast/codec-types';
+import type { AnyExpression, OrderByItem } from './ast/types';
 
 /**
  * Codec-id-keyed accessor for descriptor metadata. The unified read API for codec-id-keyed metadata (`traits`, `targetTypes`) — non-branching for parameterized vs. non-parameterized codecs. Every codec ships natively as a `CodecDescriptor` through the unified `codecs:` contributor slot (see ADR 208).
@@ -101,8 +102,32 @@ export type MutationDefaultsOptions = {
  *
  * Lanes only need contract, operations, and codecs to build typed ASTs and attach operation builders. This interface explicitly excludes runtime concerns like adapters, connection management, and transaction state.
  */
+export interface CollectionScopeRefinement {
+  readonly filter: AnyExpression;
+  readonly defaultOrderBy?: readonly OrderByItem[];
+}
+
+export interface CollectionScopeOperationContext {
+  readonly tableName: string;
+  readonly namespaceId: string;
+  readonly modelName: string;
+}
+
+/**
+ * The runtime half of a collection scope contribution. `id` is the key the contribution's type half registers under.
+ */
+export interface SqlCollectionScopeContribution {
+  readonly id: string;
+  matches(index: Readonly<Record<string, unknown>>): boolean;
+  operations(
+    index: Readonly<Record<string, unknown>>,
+    context: CollectionScopeOperationContext,
+  ): Readonly<Record<string, (...args: never[]) => CollectionScopeRefinement>>;
+}
+
 export interface ExecutionContext<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> {
   readonly contract: TContract;
+  readonly collectionScopes?: ReadonlyArray<SqlCollectionScopeContribution>;
   /**
    * Contract-bound codec registry built once at context-construction time by walking the contract's columns and resolving each through its descriptor's factory. Runtime dispatch (`encodeParam` / `decodeRow`) resolves codecs via `forCodecRef(ref)` — the single dispatch shape for AST-bound codec resolution.
    */

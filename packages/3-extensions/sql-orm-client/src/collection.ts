@@ -18,6 +18,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
 import type { Preparable } from '@internal/sql-relational-core/plan';
+import type { CollectionScopeRefinement } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -111,13 +112,8 @@ import {
   mergeAnnotations,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
-import {
-  authoredIndexName,
-  type ScopeNamesOfIndexes,
-  type ScopeRefinement,
-  type ScopesOfIndexes,
-} from './scopes';
-import type { ModelTableIndexes, WithScopeContributions } from './types';
+import { authoredIndexName, type ScopesOfIndexes } from './scopes';
+import type { ModelTableIndexes } from './types';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -306,7 +302,7 @@ class CollectionImpl<
 
   #installScopes(): void {
     const scopes: Record<string, Record<string, (...args: never[]) => unknown>> = {};
-    const contributions = this.ctx.scopeContributions ?? [];
+    const contributions = this.ctx.context.collectionScopes ?? [];
     const indexes =
       contributions.length === 0
         ? []
@@ -330,13 +326,9 @@ class CollectionImpl<
       }
     }
     Object.defineProperty(this, 'scopes', { value: scopes, enumerable: false });
-    for (const [name, operations] of Object.entries(scopes)) {
-      if (name in this) continue;
-      Object.defineProperty(this, name, { value: operations, enumerable: false });
-    }
   }
 
-  #applyScopeRefinement(refinement: ScopeRefinement): unknown {
+  #applyScopeRefinement(refinement: CollectionScopeRefinement): unknown {
     const hasExplicitOrder = this.state.orderBy !== undefined && !this.state.orderByIsDefault;
     return this.#clone({
       filters: [...this.state.filters, refinement.filter],
@@ -666,7 +658,7 @@ class CollectionImpl<
         TContract,
         RelatedName,
         SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
-        WithScopeContributions<DefaultCollectionTypeState, State['scopeContributions']>,
+        DefaultCollectionTypeState,
         IsToMany
       >,
     ) => RefinedResult,
@@ -729,7 +721,7 @@ class CollectionImpl<
         TContract,
         RelatedName,
         SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
-        WithScopeContributions<DefaultCollectionTypeState, State['scopeContributions']>,
+        DefaultCollectionTypeState,
         IsToMany
       >,
     ) => RefinedResult,
@@ -766,7 +758,7 @@ class CollectionImpl<
       const nestedCollection = this.#createCollection<
         RelatedName,
         SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
-        WithScopeContributions<DefaultCollectionTypeState, State['scopeContributions']>
+        DefaultCollectionTypeState
       >(
         blindCast<RelatedName, 'resolved include target matches the type-level relation owner'>(
           relation.relatedModelName,
@@ -2920,16 +2912,6 @@ export type Collection<
 > = CollectionImpl<TContract, ModelName, Row, State> &
   AggregateIncludeReducers<TContract, ModelName, State['nsId']> & {
     readonly scopes: CollectionScopes<TContract, ModelName, Row, State>;
-  } & {
-    readonly [K in Exclude<
-      ScopeNamesOfIndexes<
-        ModelTableIndexes<TContract, ModelName, State['nsId']>,
-        State['scopeContributions']
-      >,
-      | 'scopes'
-      | keyof CollectionImpl<TContract, ModelName, Row, State>
-      | keyof AggregateIncludeReducers<TContract, ModelName, State['nsId']>
-    >]: CollectionScopes<TContract, ModelName, Row, State>[K];
   };
 
 export type CollectionScopes<
@@ -2939,7 +2921,6 @@ export type CollectionScopes<
   State extends CollectionTypeState,
 > = ScopesOfIndexes<
   ModelTableIndexes<TContract, ModelName, State['nsId']>,
-  State['scopeContributions'],
   Collection<TContract, ModelName, Row, WithWhereState<State>>
 >;
 
