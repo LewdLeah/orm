@@ -1,12 +1,15 @@
 import type {
   ColumnDefault,
-  ColumnDefaultLiteralInputValue,
   ControlPolicy,
   ExecutionMutationDefaultPhases,
   ExecutionMutationDefaultValue,
 } from '@internal/contract/types';
 import { isColumnDefault } from '@internal/contract/types';
-import type { ForeignKeyDefaultsState } from '@internal/contract-authoring';
+import type {
+  CodecInput,
+  CodecTypeMap,
+  ForeignKeyDefaultsState,
+} from '@internal/contract-authoring';
 import type { AuthoringFieldPresetDescriptor } from '@internal/framework-components/authoring';
 import { instantiateAuthoringFieldPreset } from '@internal/framework-components/authoring';
 import type { CodecLookup, ColumnTypeDescriptor } from '@internal/framework-components/codec';
@@ -159,44 +162,41 @@ export type GeneratedFieldSpec = {
   readonly generated: ExecutionMutationDefaultValue;
 };
 
-export type CodecInputTyped<Input> = { __codecInput?(input: Input): void };
+export type CarriesCodecInput<Input> = {
+  /** Exists only in types: carries the input type of the column's codec, which `.default()` takes. */
+  __codecInput?(input: Input): void;
+};
 
-export type WithCodecInput<Descriptor, Input> = Descriptor & CodecInputTyped<Input>;
+export type WithCodecInput<Descriptor, Input> = Descriptor & CarriesCodecInput<Input>;
 
-type PackCodecInput<Pack, CodecId> = Pack extends { readonly __codecTypes?: infer CodecTypes }
-  ? CodecId extends keyof CodecTypes
-    ? CodecTypes[CodecId] extends { readonly input: infer Input }
-      ? Input
-      : never
-    : never
-  : never;
-
-export type CodecInputFromPacks<Packs, CodecId> = 0 extends 1 & Packs
-  ? Packs
-  : [PackCodecInput<Packs, CodecId>] extends [never]
-    ? ColumnDefaultLiteralInputValue
-    : PackCodecInput<Packs, CodecId>;
-
-type CodecInputOf<State> = State extends { readonly descriptor?: infer Descriptor }
-  ? NonNullable<Descriptor> extends CodecInputTyped<infer Input>
+type DefaultInputOf<State> = State extends { readonly descriptor?: infer Descriptor }
+  ? NonNullable<Descriptor> extends CarriesCodecInput<infer Input>
     ? Input
     : unknown
   : unknown;
 
+type IsList<State> = State extends { readonly many?: infer Many }
+  ? true extends Many
+    ? true
+    : false
+  : false;
+
 type DefaultLiteralOf<State> =
-  unknown extends CodecInputOf<State>
+  unknown extends DefaultInputOf<State>
     ? unknown
-    : State extends { readonly many?: true }
-      ? readonly CodecInputOf<State>[]
-      : CodecInputOf<State>;
+    : IsList<State> extends true
+      ? readonly DefaultInputOf<State>[]
+      : DefaultInputOf<State>;
 
 type EnumHandleOf<State> = State extends { readonly typeRef?: infer TypeRef }
-  ? Extract<TypeRef, EnumTypeHandle>
+  ? string extends TypeRef
+    ? never
+    : Extract<TypeRef, EnumTypeHandle>
   : never;
 
 type DefaultArgumentOf<State> = [EnumHandleOf<State>] extends [never]
   ? DefaultLiteralOf<State> | ColumnDefault
-  : State extends { readonly many?: true }
+  : IsList<State> extends true
     ? readonly EnumHandleOf<State>['values'][number][]
     : EnumHandleOf<State>['values'][number];
 
@@ -555,33 +555,48 @@ export class EnumScalarFieldBuilder<
   }
 }
 
-function columnField<Descriptor extends ColumnTypeDescriptor>(
+type CodecTypesOfNoPacks = Record<never, never>;
+
+export type ColumnFieldHelper<CodecTypes extends CodecTypeMap = CodecTypesOfNoPacks> = <
+  Descriptor extends ColumnTypeDescriptor,
+>(
   descriptor: Descriptor,
-): ScalarFieldBuilder<
+) => ScalarFieldBuilder<
   ScalarFieldState<
-    WithCodecInput<Descriptor, ColumnDefaultLiteralInputValue>,
+    WithCodecInput<Descriptor, CodecInput<CodecTypes, Descriptor>>,
     undefined,
     false,
     undefined
   >
-> {
-  return new ScalarFieldBuilder({
+>;
+
+export type NamedTypeFieldHelper<CodecTypes extends CodecTypeMap = CodecTypesOfNoPacks> = {
+  <TypeRef extends string>(
+    typeRef: TypeRef,
+  ): ScalarFieldBuilder<ScalarFieldState<ColumnTypeDescriptor, TypeRef, false, undefined>>;
+  <TypeRef extends StorageTypeInstance>(
+    typeRef: TypeRef,
+  ): ScalarFieldBuilder<
+    ScalarFieldState<
+      WithCodecInput<ColumnTypeDescriptor<TypeRef['codecId']>, CodecInput<CodecTypes, TypeRef>>,
+      TypeRef,
+      false,
+      undefined
+    >
+  >;
+  <Handle extends EnumTypeHandle>(typeRef: Handle): EnumScalarFieldBuilder<Handle>;
+};
+
+const columnField: ColumnFieldHelper = (descriptor) =>
+  new ScalarFieldBuilder({
     kind: 'scalar',
     descriptor,
     nullable: false,
   });
-}
 
 function generatedField<Descriptor extends ColumnTypeDescriptor>(
   spec: GeneratedFieldSpec & { readonly type: Descriptor },
-): ScalarFieldBuilder<
-  ScalarFieldState<
-    WithCodecInput<Descriptor, ColumnDefaultLiteralInputValue>,
-    undefined,
-    false,
-    undefined
-  >
-> {
+): ScalarFieldBuilder<ScalarFieldState<Descriptor, undefined, false, undefined>> {
   return new ScalarFieldBuilder({
     kind: 'scalar',
     descriptor: {
@@ -593,30 +608,7 @@ function generatedField<Descriptor extends ColumnTypeDescriptor>(
   });
 }
 
-function namedTypeField<TypeRef extends string>(
-  typeRef: TypeRef,
-): ScalarFieldBuilder<
-  ScalarFieldState<
-    WithCodecInput<ColumnTypeDescriptor, ColumnDefaultLiteralInputValue>,
-    TypeRef,
-    false,
-    undefined
-  >
->;
-function namedTypeField<TypeRef extends StorageTypeInstance>(
-  typeRef: TypeRef,
-): ScalarFieldBuilder<
-  ScalarFieldState<
-    WithCodecInput<ColumnTypeDescriptor<TypeRef['codecId']>, ColumnDefaultLiteralInputValue>,
-    TypeRef,
-    false,
-    undefined
-  >
->;
-function namedTypeField<Handle extends EnumTypeHandle>(
-  typeRef: Handle,
-): EnumScalarFieldBuilder<Handle>;
-function namedTypeField(typeRef: NamedStorageTypeRef): ScalarFieldBuilder {
+function untypedNamedTypeField(typeRef: NamedStorageTypeRef): ScalarFieldBuilder {
   if (isEnumTypeHandle(typeRef)) {
     return new EnumScalarFieldBuilder(
       blindCast<
@@ -636,6 +628,11 @@ function namedTypeField(typeRef: NamedStorageTypeRef): ScalarFieldBuilder {
     nullable: false,
   });
 }
+
+const namedTypeField = blindCast<
+  NamedTypeFieldHelper,
+  'the overloads narrow the returned state by the kind of type reference; the implementation returns the builder for that kind'
+>(untypedNamedTypeField);
 
 export function buildFieldPreset(
   descriptor: AuthoringFieldPresetDescriptor,

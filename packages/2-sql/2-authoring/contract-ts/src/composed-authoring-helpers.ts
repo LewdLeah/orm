@@ -1,5 +1,5 @@
-import type { ColumnDefaultLiteralInputValue } from '@internal/contract/types';
 import {
+  type CodecTypeMap,
   composePackAuthoringNamespace,
   createEntityHelpersFromNamespace,
   createFieldHelpersFromNamespace,
@@ -17,13 +17,12 @@ import type {
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import { assertNoCrossRegistryCollisions } from '@internal/framework-components/authoring';
-import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
   TargetPackRef,
 } from '@internal/framework-components/components';
-import type { StorageTypeInstance } from '@internal/sql-contract/types';
+import { blindCast } from '@internal/utils/casts';
 import {
   createFieldPresetHelper,
   createTypeHelpersFromNamespace,
@@ -31,18 +30,19 @@ import {
 import type { FieldHelpersFromNamespace } from './authoring-type-utils';
 import type {
   AnyRelationBuilder,
-  CodecInputFromPacks,
+  ColumnFieldHelper,
   ContractModelBuilder,
-  EnumScalarFieldBuilder,
   IndexTypeMap,
+  NamedTypeFieldHelper,
   ScalarFieldBuilder,
-  ScalarFieldState,
-  WithCodecInput,
 } from './contract-dsl';
 import { buildFieldPreset, field, model, rel } from './contract-dsl';
 import { contractError } from './contract-errors';
-import type { MergeExtensionIndexTypes } from './contract-types';
-import type { EnumTypeHandle } from './enum-type';
+import type {
+  ExtractCodecTypesFromPack,
+  MergeExtensionCodecTypesSafe,
+  MergeExtensionIndexTypes,
+} from './contract-types';
 
 type ExtractTypeNamespaceFromPack<Pack> = ExtractAuthoringNamespaceFromPack<
   Pack,
@@ -105,47 +105,14 @@ type TypeHelpersFromNamespace<Namespace> = {
 
 type CoreFieldHelpers = Pick<typeof field, 'column' | 'generated' | 'namedType'>;
 
-type PackAwareCoreFieldHelpers<Packs> = Pick<typeof field, 'generated'> & {
-  readonly column: <Descriptor extends ColumnTypeDescriptor>(
-    descriptor: Descriptor,
-  ) => ScalarFieldBuilder<
-    ScalarFieldState<
-      WithCodecInput<Descriptor, CodecInputFromPacks<Packs, Descriptor['codecId']>>,
-      undefined,
-      false,
-      undefined
-    >
-  >;
-  readonly namedType: {
-    <TypeRef extends string>(
-      typeRef: TypeRef,
-    ): ScalarFieldBuilder<
-      ScalarFieldState<
-        WithCodecInput<ColumnTypeDescriptor, ColumnDefaultLiteralInputValue>,
-        TypeRef,
-        false,
-        undefined
-      >
-    >;
-    <TypeRef extends StorageTypeInstance>(
-      typeRef: TypeRef,
-    ): ScalarFieldBuilder<
-      ScalarFieldState<
-        WithCodecInput<
-          ColumnTypeDescriptor<TypeRef['codecId']>,
-          CodecInputFromPacks<Packs, TypeRef['codecId']>
-        >,
-        TypeRef,
-        false,
-        undefined
-      >
-    >;
-    <Handle extends EnumTypeHandle>(typeRef: Handle): EnumScalarFieldBuilder<Handle>;
-  };
+type FieldHelpersForCodecs<CodecTypes extends CodecTypeMap> = Pick<typeof field, 'generated'> & {
+  readonly column: ColumnFieldHelper<CodecTypes>;
+  readonly namedType: NamedTypeFieldHelper<CodecTypes>;
 };
 
-type ExtensionPacksOf<Extensions> =
-  Extensions extends Record<string, unknown> ? Extensions[keyof Extensions] : never;
+type CodecTypesOfPacks<Family, Target, Extensions> = ExtractCodecTypesFromPack<Family> &
+  ExtractCodecTypesFromPack<Target> &
+  MergeExtensionCodecTypesSafe<Extensions>;
 
 type MergeAllPackIndexTypes<Family, Target, Extensions> = MergeExtensionIndexTypes<
   { readonly __family: Family; readonly __target: Target } & (Extensions extends Record<
@@ -184,12 +151,12 @@ export type ComposedAuthoringHelpers<
     ExtractEntitiesNamespaceFromPack<Target> &
     MergeExtensionEntityNamespaces<Extensions>
 > & {
-  readonly field: PackAwareCoreFieldHelpers<Family | Target | ExtensionPacksOf<Extensions>> &
+  readonly field: FieldHelpersForCodecs<CodecTypesOfPacks<Family, Target, Extensions>> &
     FieldHelpersFromNamespace<
       ExtractFieldNamespaceFromPack<Family> &
         ExtractFieldNamespaceFromPack<Target> &
         MergeExtensionFieldNamespaces<Extensions>,
-      Family | Target | ExtensionPacksOf<Extensions>
+      CodecTypesOfPacks<Family, Target, Extensions>
     >;
   readonly model: PackAwareModel<MergeAllPackIndexTypes<Family, Target, Extensions>>;
   readonly rel: typeof rel;
@@ -306,7 +273,10 @@ export function createComposedAuthoringHelpers<
   assertNoCrossRegistryCollisions(typeNamespace, fieldNamespace, entityNamespace);
   assertNoBuiltInEntityCollisions(entityNamespace);
 
-  return {
+  return blindCast<
+    ComposedAuthoringHelpers<Family, Target, Extensions>,
+    'the helpers are the same objects for every set of packs; the packs decide only their types'
+  >({
     ...createEntityHelpersFromNamespace(entityNamespace, {
       ctx: { family: options.family.familyId, target: options.target.targetId },
     }),
@@ -314,5 +284,5 @@ export function createComposedAuthoringHelpers<
     model,
     rel,
     type: createTypeHelpersFromNamespace(typeNamespace),
-  } as ComposedAuthoringHelpers<Family, Target, Extensions>;
+  });
 }

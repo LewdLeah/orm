@@ -1,4 +1,6 @@
 import type {
+  CodecInput,
+  CodecTypeMap,
   ResolveTemplateValue,
   TupleFromArgumentDescriptors,
 } from '@internal/contract-authoring';
@@ -7,12 +9,7 @@ import type {
   AuthoringFieldPresetDescriptor,
 } from '@internal/framework-components/authoring';
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
-import type {
-  CodecInputFromPacks,
-  ScalarFieldBuilder,
-  ScalarFieldState,
-  WithCodecInput,
-} from './contract-dsl';
+import type { ScalarFieldBuilder, ScalarFieldState, WithCodecInput } from './contract-dsl';
 
 export type UnionToIntersection<U> = (U extends unknown ? (value: U) => void : never) extends (
   value: infer I,
@@ -48,12 +45,12 @@ export type FieldBuilderFromPresetDescriptor<
   Descriptor extends AuthoringFieldPresetDescriptor,
   Args extends readonly unknown[] = readonly [],
   ConstraintName extends string | undefined = undefined,
-  Packs = never,
+  CodecTypes extends CodecTypeMap = Record<never, never>,
 > = ScalarFieldBuilder<
   ScalarFieldState<
     WithCodecInput<
       ColumnTypeDescriptor<PresetCodecId<Descriptor, Args>>,
-      CodecInputFromPacks<Packs, PresetCodecId<Descriptor, Args>>
+      CodecInput<CodecTypes, { readonly codecId: PresetCodecId<Descriptor, Args> }>
     >,
     undefined,
     ResolveTemplateValue<Descriptor['output']['nullable'], Args> extends true ? true : false,
@@ -71,14 +68,14 @@ export type FieldBuilderFromPresetDescriptor<
 
 export type FieldHelperFunctionWithoutNamedConstraint<
   Descriptor extends AuthoringFieldPresetDescriptor,
-  Packs = never,
+  CodecTypes extends CodecTypeMap = Record<never, never>,
 > = Descriptor extends {
   readonly args: infer Args extends readonly AuthoringArgumentDescriptor[];
 }
   ? <const Params extends TupleFromArgumentDescriptors<Args>>(
       ...args: Params
-    ) => FieldBuilderFromPresetDescriptor<Descriptor, Params, undefined, Packs>
-  : () => FieldBuilderFromPresetDescriptor<Descriptor, readonly [], undefined, Packs>;
+    ) => FieldBuilderFromPresetDescriptor<Descriptor, Params, undefined, CodecTypes>
+  : () => FieldBuilderFromPresetDescriptor<Descriptor, readonly [], undefined, CodecTypes>;
 
 /**
  * An intersection of two call signatures rather than one rest-tuple signature
@@ -91,32 +88,38 @@ export type FieldHelperFunctionWithoutNamedConstraint<
  */
 export type FieldHelperFunctionWithNamedConstraint<
   Descriptor extends AuthoringFieldPresetDescriptor,
-  Packs = never,
+  CodecTypes extends CodecTypeMap = Record<never, never>,
 > = Descriptor extends {
   readonly args: infer Args extends readonly AuthoringArgumentDescriptor[];
 }
   ? (<const Params extends TupleFromArgumentDescriptors<Args>>(
       ...args: Params
-    ) => FieldBuilderFromPresetDescriptor<Descriptor, Params, undefined, Packs>) &
+    ) => FieldBuilderFromPresetDescriptor<Descriptor, Params, undefined, CodecTypes>) &
       (<
         const Params extends TupleFromArgumentDescriptors<Args>,
         const Name extends string | undefined = undefined,
       >(
         ...args: [...params: Params, options: NamedConstraintSpec<Name>]
-      ) => FieldBuilderFromPresetDescriptor<Descriptor, Params, Name, Packs>)
+      ) => FieldBuilderFromPresetDescriptor<Descriptor, Params, Name, CodecTypes>)
   : <const Name extends string | undefined = undefined>(
       options?: NamedConstraintSpec<Name>,
-    ) => FieldBuilderFromPresetDescriptor<Descriptor, readonly [], Name, Packs>;
+    ) => FieldBuilderFromPresetDescriptor<Descriptor, readonly [], Name, CodecTypes>;
 
-export type FieldHelperFunction<Descriptor extends AuthoringFieldPresetDescriptor, Packs = never> =
+export type FieldHelperFunction<
+  Descriptor extends AuthoringFieldPresetDescriptor,
+  CodecTypes extends CodecTypeMap = Record<never, never>,
+> =
   SupportsNamedConstraintOptions<Descriptor> extends true
-    ? FieldHelperFunctionWithNamedConstraint<Descriptor, Packs>
-    : FieldHelperFunctionWithoutNamedConstraint<Descriptor, Packs>;
+    ? FieldHelperFunctionWithNamedConstraint<Descriptor, CodecTypes>
+    : FieldHelperFunctionWithoutNamedConstraint<Descriptor, CodecTypes>;
 
-export type FieldHelpersFromNamespace<Namespace, Packs = never> = {
+export type FieldHelpersFromNamespace<
+  Namespace,
+  CodecTypes extends CodecTypeMap = Record<never, never>,
+> = {
   readonly [K in keyof Namespace]: Namespace[K] extends AuthoringFieldPresetDescriptor
-    ? FieldHelperFunction<Namespace[K], Packs>
+    ? FieldHelperFunction<Namespace[K], CodecTypes>
     : Namespace[K] extends Record<string, unknown>
-      ? FieldHelpersFromNamespace<Namespace[K], Packs>
+      ? FieldHelpersFromNamespace<Namespace[K], CodecTypes>
       : unknown;
 };
