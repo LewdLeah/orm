@@ -38,7 +38,6 @@ export type DistroInfo = {
     | 'debian'
     | 'musl'
     | 'arm'
-    | 'nixos'
     | 'freebsd11'
     | 'freebsd12'
     | 'freebsd13'
@@ -124,6 +123,7 @@ export function parseDistro(osReleaseInput: string): DistroInfo {
    *
    * Alpine Linux => ID=alpine                                     => targetDistro=musl, familyDistro=alpine
    * Raspbian     => ID=raspbian, ID_LIKE=debian                   => targetDistro=arm, familyDistro=debian
+   * NixOS        => ID=nixos                                      => targetDistro=debian, familyDistro=nixos
    * Debian       => ID=debian                                     => targetDistro=debian, familyDistro=debian
    * Distroless   => ID=debian                                     => targetDistro=debian, familyDistro=debian
    * Ubuntu       => ID=ubuntu, ID_LIKE=debian                     => targetDistro=debian, familyDistro=debian
@@ -157,9 +157,9 @@ export function parseDistro(osReleaseInput: string): DistroInfo {
       { id: 'nixos' },
       ({ id: originalDistro }) =>
         ({
-          targetDistro: 'nixos',
-          originalDistro,
+          targetDistro: 'debian',
           familyDistro: 'nixos',
+          originalDistro,
         }) as const,
     )
     .with(
@@ -302,6 +302,17 @@ export function computeLibSSLSpecificPaths(args: ComputeLibSSLSpecificPathsParam
       /* Linux Alpine */
       debug('Trying platform-specific paths for "alpine"')
       return ['/lib', '/usr/lib']
+    })
+    .with({ familyDistro: 'nixos' }, () => {
+      /* NixOS (nix-ld lists libraries for foreign binaries in NIX_LD_LIBRARY_PATH) */
+      debug('Trying platform-specific paths for "nixos"')
+      return [
+        ...new Set(
+          [process.env.NIX_LD_LIBRARY_PATH, process.env.LD_LIBRARY_PATH].flatMap((value) =>
+            (value ?? '').split(':').filter(Boolean),
+          ),
+        ),
+      ]
     })
     .with({ familyDistro: 'debian' }, ({ archFromUname }) => {
       /* Linux Debian, Ubuntu, etc */
@@ -531,10 +542,6 @@ ${additionalMessage}`,
 
   if (platform === 'netbsd') {
     return 'netbsd'
-  }
-
-  if (platform === 'linux' && targetDistro === 'nixos') {
-    return 'linux-nixos'
   }
 
   if (platform === 'linux' && arch === 'arm64') {

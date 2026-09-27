@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { computeLibSSLSpecificPaths, getArchFromUname, getSSLVersion } from '../getPlatform'
 import { vitestContext } from '../test-utils/vitestContext'
@@ -8,10 +8,29 @@ const describeIf = (condition: boolean) => (condition ? describe : describe.skip
 const ctx = vitestContext.new().assemble()
 
 describeIf(process.platform === 'linux')('computeLibSSLSpecificPaths', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('should not return an error', () => {
     const arch = 'x64'
     const archFromUname = 'x86_64'
     computeLibSSLSpecificPaths({ familyDistro: 'debian', arch, archFromUname })
+  })
+
+  it('reads nix-ld library path on nixos', () => {
+    vi.stubEnv('NIX_LD_LIBRARY_PATH', '/run/current-system/sw/share/nix-ld/lib:/nix/store/abc-openssl-3.0.x/lib')
+    vi.stubEnv('LD_LIBRARY_PATH', '')
+    expect(computeLibSSLSpecificPaths({ familyDistro: 'nixos', arch: 'x64', archFromUname: 'x86_64' })).toEqual([
+      '/run/current-system/sw/share/nix-ld/lib',
+      '/nix/store/abc-openssl-3.0.x/lib',
+    ])
+  })
+
+  it('returns no paths on nixos without nix-ld', () => {
+    vi.stubEnv('NIX_LD_LIBRARY_PATH', '')
+    vi.stubEnv('LD_LIBRARY_PATH', '')
+    expect(computeLibSSLSpecificPaths({ familyDistro: 'nixos', arch: 'x64', archFromUname: 'x86_64' })).toEqual([])
   })
 })
 
