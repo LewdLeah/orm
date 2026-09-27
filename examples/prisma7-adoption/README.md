@@ -63,7 +63,7 @@ Two rules to know before you start:
 
 ### 4. Transfer migration ownership, then 5. remove Prisma 7
 
-This example stops before phase 4. The [upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql)'s phase 4 works from a Prisma ORM 8 contract file, and this example reads `prisma/schema.prisma` through `prisma7Schema(...)` instead. Before phase 4, a project on this path generates a contract file with the guide's [steps 2.3 to 2.5](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql#23-infer-the-contract-from-the-live-database) (`prisma contract infer`, edit the inferred contract, `prisma contract emit`) and points `contract:` in `prisma.config.ts` at that file. Then it follows [phase 4](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql#41-sign-the-existing-database) and phase 5 as the guide writes them.
+This example stops before phase 4. The [upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql)'s phase 4 works from a Prisma ORM 8 contract file, and this example reads `prisma/schema.prisma` through `prisma7Schema(...)` instead. When the last route has moved, `prisma contract print --output prisma/contract.prisma` writes the Prisma 8 PSL that produces the same contract this example emits from `prisma/schema.prisma`; point `contract` in `prisma.config.ts` at the written file and run `prisma contract emit` again to confirm the contract is unchanged. Then follow [phase 4](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql#41-sign-the-existing-database) and phase 5 as the guide writes them.
 
 ## What a Prisma 7 user meets along the way
 
