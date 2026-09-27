@@ -437,11 +437,8 @@ async function findLibSSL(directory: string) {
   try {
     const dirContents = await fs.readdir(directory)
     return dirContents.find((value) => value.startsWith('libssl.so.') && !value.startsWith('libssl.so.0'))
-  } catch (e) {
-    if (e.code === 'ENOENT') {
-      return undefined
-    }
-    throw e
+  } catch (_) {
+    return undefined
   }
 }
 

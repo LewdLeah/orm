@@ -64,6 +64,12 @@ describeIf(process.platform === 'linux')('getSSLVersion', () => {
       expect(strategy).not.toEqual(focusedStrategy)
     })
 
+    it("falls back with a path that's not a dir", async () => {
+      ctx.fixture('libssl-specific-path/with-libssl-0')
+      const { strategy } = await getSSLVersion([`${ctx.tmpDir}/libssl.so.3`])
+      expect(strategy).not.toEqual(focusedStrategy)
+    })
+
     it('selects the oldest libssl version, excluding libssl-0.x.x', async () => {
       ctx.fixture('libssl-specific-path/with-libssl-0')
       const { libssl, strategy } = await getSSLVersion([ctx.tmpDir])
