@@ -1,5 +1,4 @@
 import sqlFamilyPack from '@internal/family-sql/pack';
-import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
   SqlNamespaceBase,
@@ -59,12 +58,7 @@ type SqliteScaffold<
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
 > = SqliteBaseScaffold<Extensions>;
 
-function createSqliteCodecLookup(
-  extensions: Record<string, ExtensionPackRef<'sql', string>> | undefined,
-): CodecLookup {
-  const target: TargetPackRef<'sql', 'sqlite'> = sqlitePack;
-  return assembleSqliteCodecRegistry(target, Object.values(extensions ?? {}));
-}
+const target: TargetPackRef<'sql', 'sqlite'> = sqlitePack;
 
 export function defineContract<
   const Types extends TypesConstraint = Record<never, never>,
@@ -96,7 +90,9 @@ export function defineContract(
   const bound = {
     ...definition,
     createNamespace: sqliteCreateNamespace,
-    codecLookup: definition.codecLookup ?? createSqliteCodecLookup(definition.extensions),
+    codecLookup:
+      definition.codecLookup ??
+      assembleSqliteCodecRegistry(target, Object.values(definition.extensions ?? {})),
   };
   if (factory !== undefined) {
     return buildBoundContract(sqlFamilyPack, sqlitePack, bound, factory);

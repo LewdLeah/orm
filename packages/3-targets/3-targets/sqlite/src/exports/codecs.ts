@@ -4,7 +4,7 @@ export {
   createSqliteBuiltinCodecLookup,
   createSqliteCodecRegistryWithBuiltins,
   type SqliteCodecRegistry,
-} from '../core/codec-lookup';
+} from '../core/codec-registry';
 export type {
   SqliteBigintDescriptor,
   SqliteBigintNumberDescriptor,

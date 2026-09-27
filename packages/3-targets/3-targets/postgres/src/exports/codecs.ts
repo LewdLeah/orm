@@ -5,7 +5,7 @@ export {
   createPostgresBuiltinCodecLookup,
   createPostgresCodecRegistryWithBuiltins,
   type PostgresCodecRegistry,
-} from '../core/codec-lookup';
+} from '../core/codec-registry';
 export type {
   PgBitDescriptor,
   PgBoolDescriptor,
