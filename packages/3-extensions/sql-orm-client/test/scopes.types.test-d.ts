@@ -152,20 +152,15 @@ test('chaining a builder method on a custom collection loses the scopes', () => 
 });
 
 class ScopedPostCollection extends Collection<
-  ScopedContract,
-  'Post',
-  import('../src/types').DefaultModelRow<ScopedContract, 'Post'>,
-  import('../src/types').WithScopeContributions<
-    import('../src/types').DefaultCollectionTypeState,
-    readonly [typeof fullTextScopes]
-  >
+  import('../src/types').ContractWithScopes<ScopedContract, readonly [typeof fullTextScopes]>,
+  'Post'
 > {
   relevant(query: FakeTsQuery) {
     return this.scopes.search.fulltext(query).limit(5);
   }
 }
 
-test('a custom class that names the contributions in its state can use scopes inside', () => {
+test('a custom class that names the contributions in its contract type can use scopes inside', () => {
   const scoped = orm({
     runtime,
     context,

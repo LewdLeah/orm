@@ -112,7 +112,7 @@ import {
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
 import { authoredIndexName, type ScopeRefinement, type ScopesOfIndexes } from './scopes';
-import type { ModelTableIndexes, WithScopeContributions } from './types';
+import type { ContractScopes, ModelTableIndexes } from './types';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -657,7 +657,7 @@ class CollectionImpl<
         TContract,
         RelatedName,
         SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
-        WithScopeContributions<DefaultCollectionTypeState, State['scopeContributions']>,
+        DefaultCollectionTypeState,
         IsToMany
       >,
     ) => RefinedResult,
@@ -720,7 +720,7 @@ class CollectionImpl<
         TContract,
         RelatedName,
         SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
-        WithScopeContributions<DefaultCollectionTypeState, State['scopeContributions']>,
+        DefaultCollectionTypeState,
         IsToMany
       >,
     ) => RefinedResult,
@@ -757,7 +757,7 @@ class CollectionImpl<
       const nestedCollection = this.#createCollection<
         RelatedName,
         SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
-        WithScopeContributions<DefaultCollectionTypeState, State['scopeContributions']>
+        DefaultCollectionTypeState
       >(
         blindCast<RelatedName, 'resolved include target matches the type-level relation owner'>(
           relation.relatedModelName,
@@ -2920,7 +2920,7 @@ export type CollectionScopes<
   State extends CollectionTypeState,
 > = ScopesOfIndexes<
   ModelTableIndexes<TContract, ModelName, State['nsId']>,
-  State['scopeContributions'],
+  ContractScopes<TContract>,
   Collection<TContract, ModelName, Row, WithWhereState<State>>
 >;
 

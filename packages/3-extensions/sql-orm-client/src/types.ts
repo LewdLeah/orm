@@ -158,7 +158,6 @@ export interface CollectionTypeState {
    * (`.where(...)`, `.variant(...)`, …) automatically.
    */
   readonly nsId: string;
-  readonly scopeContributions: readonly AnyScopeContribution[];
 }
 
 export type RelationCardinalityTag = '1:1' | 'N:1' | '1:N' | 'N:M';
@@ -169,13 +168,24 @@ export type DefaultCollectionTypeState = {
   readonly hasUniqueFilter: false;
   readonly variantName: undefined;
   readonly nsId: never;
-  readonly scopeContributions: readonly [];
 };
 
-export type WithScopeContributions<
-  State extends CollectionTypeState,
+declare const scopeContributionsCarrier: unique symbol;
+
+export type ContractWithScopes<
+  TContract extends Contract<SqlStorage>,
   Contributions extends readonly AnyScopeContribution[],
-> = Omit<State, 'scopeContributions'> & { readonly scopeContributions: Contributions };
+> = Contributions extends readonly []
+  ? TContract
+  : TContract & { readonly [scopeContributionsCarrier]?: Contributions };
+
+export type ContractScopes<TContract> = TContract extends {
+  readonly [scopeContributionsCarrier]?: infer Contributions;
+}
+  ? NonNullable<Contributions> extends readonly AnyScopeContribution[]
+    ? NonNullable<Contributions>
+    : readonly []
+  : readonly [];
 
 export type WithNsId<State extends CollectionTypeState, NsId extends string> = Omit<
   State,

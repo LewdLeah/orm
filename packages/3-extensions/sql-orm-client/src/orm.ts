@@ -14,12 +14,12 @@ import type {
   CollectionContext,
   CollectionModelName,
   CollectionTypeState,
+  ContractWithScopes,
   DefaultCollectionTypeState,
   InferRootRow,
   ModelTableIndexes,
   RuntimeQueryable,
   WithNsId,
-  WithScopeContributions,
 } from './types';
 
 export interface OrmOptions<
@@ -58,10 +58,10 @@ type ModelCollection<
   Scopes extends readonly AnyScopeContribution[],
 > = [CustomCollectionForKey<Collections, ModelName>] extends [never]
   ? Collection<
-      TContract,
+      ContractWithScopes<TContract, Scopes>,
       ModelName,
       InferRootRow<TContract, ModelName, NsId>,
-      WithScopeContributions<WithNsId<DefaultCollectionTypeState, NsId>, Scopes>
+      WithNsId<DefaultCollectionTypeState, NsId>
     >
   : CustomCollectionWithScopes<
       TContract,
