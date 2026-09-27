@@ -52,7 +52,7 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 | 2 | `execution-ref-neutral-names` | #30399, merged 2026-09-25 |
 | 3 | `mongo-execution-defaults` | #30403, merged 2026-09-25 |
 | 5 | `mongo-prisma6-source` | #30405, merged 2026-09-27 |
-| 4 | `mongo-generator-runtime-hoist` | #30406, auto-merge armed, awaiting CI |
+| 4 | `mongo-generator-runtime-hoist` | #30406, merged 2026-09-27 |
 | 6 | `mongo-json-bson` | in progress, stacked on 4 |
 
 ## Dependencies

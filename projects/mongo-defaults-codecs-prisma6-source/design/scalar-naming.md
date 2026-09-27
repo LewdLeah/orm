@@ -147,6 +147,9 @@ Eight points § 5 left open, now fixed:
 6. **Path format** is dot notation with array indices as segments (`items.0.when`). At the root the message says `at the root` instead of an empty path.
 7. **Detection glob for the extension fragment entry** is `**/*.{ts,mts,cts}`, because an extension author's repository does not have this repository's layout.
 8. **Fragment directory** for this slice is `upgrade-instructions/pending/mongo-json-and-bson/` (the § 8 text below is amended accordingly); the earlier slice's fragment stays `mongo-target-owns-codecs`.
+9. **`DBRef` on decode.** The `bson` library turns any subdocument with a string `$ref` and an `$id` into a `DBRef` instance. That is a plain BSON `object` following a naming convention, not the deprecated `dbPointer` type, so decode rebuilds the document it was stored as, `{ $ref, $id[, $db], ...fields }`, and decodes each member with its own path; an `ObjectId` in `$id` is then refused at `<path>.$id` as `objectId`. `dbPointer` names only the real deprecated type.
+10. **Objects the driver never produces** (`Map`, `Set`, class instances) are refused on decode with `RUNTIME.DECODE_FAILED` and named by their constructor in place of the `$type` alias, because dropping their contents would be silent data loss.
+11. **Enums over `Json`.** The enum entity factory reads `targetTypes[0]` as the member storage type; with the list it would resolve `@@type("mongo/json@1")` to `object`. An enum's codec must declare exactly one target type; the factory reports `Enum "<name>": codec "<id>" declares <n> storage types; an enum needs exactly one.` for zero or several. `Json` and `Bson` are therefore not enum codecs.
 
 ## 6. `Bson` on Mongo, exact specification
 
