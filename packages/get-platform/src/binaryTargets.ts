@@ -18,6 +18,7 @@ export type BinaryTarget =
   | 'linux-musl-openssl-3.0.x'
   | 'linux-musl-arm64-openssl-1.1.x'
   | 'linux-musl-arm64-openssl-3.0.x'
+  | 'linux-nixos'
   | 'linux-static-x64'
   | 'linux-static-arm64'
   | 'windows'
@@ -49,6 +50,7 @@ export const binaryTargets: BinaryTarget[] = [
   'linux-musl-openssl-3.0.x',
   'linux-musl-arm64-openssl-1.1.x',
   'linux-musl-arm64-openssl-3.0.x',
+  'linux-nixos',
   'linux-static-x64',
   'linux-static-arm64',
   'windows',
