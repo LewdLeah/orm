@@ -11,6 +11,10 @@ import { type EnumTypeHandle, enumType } from '@internal/mongo-contract-ts/contr
 import { blockAttribute, str } from '@internal/psl-parser';
 import { blindCast } from '@internal/utils/casts';
 
+function typeArgumentSpan(block: PslExtensionBlock): PslExtensionBlock['span'] | undefined {
+  return block.blockAttributes.find((attribute) => attribute.name === 'type')?.args[0]?.span;
+}
+
 export const mongoFamilyEnumEntityDescriptor = {
   kind: 'entity' as const,
   discriminator: 'enum',
@@ -44,7 +48,7 @@ export const mongoFamilyEnumEntityDescriptor = {
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `Enum "${block.name}": codec "${codecId}" declares ${storageTypes.length} storage types; an enum needs exactly one.`,
           sourceId,
-          span: codecSpan,
+          span: typeArgumentSpan(block) ?? codecSpan,
         });
         return undefined;
       }
