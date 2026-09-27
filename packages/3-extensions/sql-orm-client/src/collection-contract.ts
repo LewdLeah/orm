@@ -684,3 +684,12 @@ function capabilityEnabled(value: unknown): boolean {
 export function isToOneCardinality(cardinality: RelationCardinalityTag | undefined): boolean {
   return cardinality === '1:1' || cardinality === 'N:1';
 }
+
+export function storageTableIndexes(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+): ReadonlyArray<Readonly<Record<string, unknown>>> | undefined {
+  const indexes = resolveTableForContract(contract, namespaceId, tableName)?.table.indexes;
+  return indexes?.map((index) => ({ ...index }));
+}
