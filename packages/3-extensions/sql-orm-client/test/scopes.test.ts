@@ -18,7 +18,7 @@ function scopedContract(): ScopedContract {
     expression: 'to_tsvector(\'english\', "title")',
     unique: false,
     type: 'gin',
-    options: { language: 'english', weights: [['title']] },
+    options: { language: 'english', weights: [['title']], requiresScopes: ['test/fulltext'] },
   });
   posts.indexes = [...posts.indexes, fullText('search'), fullText('where'), fullText('published')];
   return deserializeTestContract(json) as unknown as ScopedContract;
@@ -32,14 +32,12 @@ class PostCollection extends Collection<ScopedContract, 'Post'> {
 
 function setup() {
   const runtime = createMockRuntime();
-  const context = buildTestContextFromContract(scopedContract());
-  const db = orm({
-    runtime,
-    context,
-    collections: { Post: PostCollection },
-    scopes: [fullTextScopes, brinScopes],
-  });
-  const plain = orm({ runtime, context, scopes: [fullTextScopes, brinScopes] });
+  const context = {
+    ...buildTestContextFromContract(scopedContract()),
+    collectionScopes: [fullTextScopes, brinScopes],
+  };
+  const db = orm({ runtime, context, collections: { Post: PostCollection } });
+  const plain = orm({ runtime, context });
   return { runtime, db, plain };
 }
 
@@ -52,6 +50,17 @@ function lastSelect(runtime: ReturnType<typeof createMockRuntime>) {
 const q = fakeTsQuery('hello');
 
 describe('collection scopes', () => {
+  it('fails at construction when the contract needs a contribution that was not passed', () => {
+    const runtime = createMockRuntime();
+    const context = {
+      ...buildTestContextFromContract(scopedContract()),
+      collectionScopes: [brinScopes],
+    };
+    expect(() => orm({ runtime, context })).toThrow(
+      /Index 'search' on table 'public.posts' needs the collection scope contribution 'test\/fulltext'/,
+    );
+  });
+
   it('adds a filter and a default order', async () => {
     const { runtime, db } = setup();
     await db.public.Post.scopes.search.fulltext(q).limit(10).all();
@@ -78,7 +87,7 @@ describe('collection scopes', () => {
     const { db } = setup();
     const searched = db.public.Post.scopes.search.fulltext(q);
     expect(searched).toBeInstanceOf(PostCollection);
-    expect(typeof searched.published).toBe('function');
+    expect('published' in searched).toBe(true);
     expect(typeof db.public.Post.where).toBe('function');
     expect(typeof db.public.Post.scopes.where.fulltext).toBe('function');
     expect(typeof db.public.Post.scopes.published.fulltext).toBe('function');

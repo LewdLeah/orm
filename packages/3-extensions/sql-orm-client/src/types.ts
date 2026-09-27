@@ -86,8 +86,6 @@ export interface IncludeExpr {
   readonly combine: Readonly<Record<string, IncludeCombineBranch>> | undefined;
 }
 
-import type { AnyScopeContribution } from './scopes';
-
 export interface CollectionState {
   readonly filters: readonly AnyExpression[];
   readonly includes: readonly IncludeExpr[];
@@ -170,23 +168,6 @@ export type DefaultCollectionTypeState = {
   readonly nsId: never;
 };
 
-declare const scopeContributionsCarrier: unique symbol;
-
-export type ContractWithScopes<
-  TContract extends Contract<SqlStorage>,
-  Contributions extends readonly AnyScopeContribution[],
-> = Contributions extends readonly []
-  ? TContract
-  : TContract & { readonly [scopeContributionsCarrier]?: Contributions };
-
-export type ContractScopes<TContract> = TContract extends {
-  readonly [scopeContributionsCarrier]?: infer Contributions;
-}
-  ? NonNullable<Contributions> extends readonly AnyScopeContribution[]
-    ? NonNullable<Contributions>
-    : readonly []
-  : readonly [];
-
 export type WithNsId<State extends CollectionTypeState, NsId extends string> = Omit<
   State,
   'nsId'
@@ -210,7 +191,6 @@ export interface RuntimeQueryable extends RuntimeScope {
 export interface CollectionContext<TContract extends Contract<SqlStorage>> {
   readonly runtime: RuntimeQueryable;
   readonly context: ExecutionContext<TContract>;
-  readonly scopeContributions?: readonly AnyScopeContribution[];
 }
 
 type PredicateOperand<T, CodecId extends string> =

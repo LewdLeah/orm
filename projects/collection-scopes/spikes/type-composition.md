@@ -144,3 +144,131 @@ interface ScopeRefinement {
 - **Not tested:** `GroupedCollection`, prepared collections, polymorphic variants (`.variant()`), contracts with several namespaces, and the Mongo ORM client.
 - **The structured index representation is assumed.** The spike put the fields in `options`. The real representation is still open and changes what `Match` looks like, but not the mechanism.
 - **The runtime is throwaway.** It installs members on each instance and uses casts in the fixture. It shows the path works and should not be kept.
+
+## Cost of cheaper variants
+
+**Date:** 2026-09-27. **Baseline:** `model-scopes-design` at `072aeb7f57`, measured again on this machine. It gave the same counts as the first spike: 1,495,458 for the package and 732,083 for the demo.
+
+### Answer
+
+**Use variant E without direct placement.** The ORM client declares an empty registry interface. Each contributing package adds its entry by declaration merging. It is the only variant that meets requirement (f), and it is also the cheapest: +1.0% in the package and +0.5% in the demo when no scope is in use.
+
+**Direct placement is what costs.** Every form of `db.Post.search` adds 8% to 11% in the package and about 4% in the demo, for every user, with no scope in use. Checking the name against a fixed union instead of `keyof` the collection saves only about two points in the package and one in the demo. Most of the cost comes from the extra mapped type in the `Collection` intersection, not from the name comparison.
+
+### Requirement (f)
+
+The user writes `postgres<Contract>({ contractJson, extensions: [...] })` as today, with no other type argument or annotation, and every contribution is fully typed.
+
+- **Variants A to D fail (f).** They pass contributions as a type argument inferred from the call. TypeScript stops inferring once `<Contract>` is written. The first spike's probe proves it with `@ts-expect-error`.
+- **Variant E meets (f).** The demo's existing `src/prisma/db.ts` was not changed. The probe imports `db` from it and gets typed scopes from two packages: the Postgres facade and `@prisma/orm-extension-pgvector`.
+- **One other approach would meet (f):** the emitted `contract.d.ts` carries the operation types, as it does today for query operations and aggregates. That breaks requirement (a), so it was not built.
+
+### Measurements
+
+Instantiation counts from `tsc --extendedDiagnostics`. The counts repeat exactly between runs. "No scopes" means the scope tests are excluded from the package, and the demo is unchanged. "With scopes" adds the scope tests to the package and one probe file to the demo.
+
+| Variant | Package, no scopes | Package, with scopes | Demo, no scopes | Demo, with scopes | (a) | (b) | (c) | (d) | (e) | (f) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Baseline | 1,495,458 | n/a | 732,083 | n/a | | | | | | |
+| First spike (state member, direct placement), not measured again | 1,810,704 (+21.1%) | 1,872,197 (+25.2%) | 774,709 (+5.8%) | 789,170 (+7.8%) | yes | yes | yes | yes | yes | **no** |
+| A: `scopes` only | 1,628,908 (+8.9%) | 1,682,318 (+12.5%) | 738,395 (+0.86%) | 751,058 (+2.6%) | yes | yes | yes | `scopes.<name>` only | yes | **no** |
+| B: A, contributions on the contract type argument | 1,522,005 (+1.8%) | 1,602,319 (+7.1%) | 735,037 (+0.40%) | 764,845 (+4.5%) | yes | yes | yes | `scopes.<name>` only | yes | **no** |
+| C: B, `scopes` through an interface | 1,580,535 (+5.7%) | 1,661,505 (+11.1%) | 736,810 (+0.65%) | 766,726 (+4.7%) | yes | yes | yes | `scopes.<name>` only | yes | **no** |
+| D: B plus direct placement, fixed union | 1,649,615 (+10.3%) | 1,737,866 (+16.2%) | 763,171 (+4.2%) | 795,175 (+8.6%) | yes | yes | yes | yes | yes | **no** |
+| **E: registry, `scopes` only** | **1,510,673 (+1.0%)** | 1,573,222 (+5.2%) | **735,693 (+0.49%)** | 748,029 (+2.2%) | yes | yes | yes | `scopes.<name>` only | yes | **yes** |
+| E, `scopes` through an interface | 1,568,678 (+4.9%) | 1,632,806 (+9.2%) | 737,279 (+0.71%) | 749,632 (+2.4%) | yes | yes | yes | `scopes.<name>` only | yes | yes |
+| E plus direct placement, fixed union | 1,622,501 (+8.5%) | 1,691,645 (+13.1%) | 760,729 (+3.9%) | 774,512 (+5.8%) | yes | yes | yes | partly, see below | yes | yes |
+| E plus direct placement, `keyof` | 1,654,697 (+10.6%) | 1,725,360 (+15.4%) | 768,270 (+4.9%) | 782,491 (+6.9%) | yes | yes | yes | partly, see below | yes | yes |
+
+How to read the table:
+
+- **Compare the "no scopes" columns between variants.** The "with scopes" columns use different test files and probes for each variant, so they are only a rough guide.
+- **In variant E the demo's "no scopes" number includes two registered contributions.** The Postgres facade registers one for every user, and the demo imports pgvector, which registers a second. In variants A to D the demo's "no scopes" number has no contribution at all. Variant E is still as cheap.
+- **Every demo number was checked for `any`.** Each run also typechecks a probe that asserts `db.orm.public.Post` is not `any` and that an unknown member is an error. One run with a broken import produced untyped collections, and the run reported the errors.
+- **Wall-clock times are left out.** The machine was busy. The load average was 69 when the work started.
+- **The type count fell below the baseline in several variants**, for example 229,522 against 240,857 for variant E in the package. I could not explain it. All existing type tests in the package pass.
+
+### What each variant changed
+
+Each variant is its own commit on the branch. The branch tip is variant E without direct placement.
+
+| Variant | Commit | Change |
+| --- | --- | --- |
+| E | `376a425bb4` | See "Variant E" below. |
+| E, interface | `d3066e4210` | `Collection` intersects `CollectionScopesMember<...>`, an interface with the one `scopes` member. |
+| E plus direct, fixed union | `ae54591151` | Adds the mapped type for direct placement. Names are excluded by `ReservedCollectionMemberName`. |
+| E plus direct, `keyof` | `7037a814dc` | The same, with names excluded by `keyof` the collection and the aggregate reducers. |
+| A | `091bf2a60a` | The first spike with the direct-placement mapped type removed from `Collection` and from the custom class wrapper. |
+| B | `4790f05671` | A, with `scopeContributions` removed from `CollectionTypeState`. `orm()` returns `Collection<TContract & { [carrier]?: Scopes }, ...>`. `Collection` reads the contributions back from its contract type argument. |
+| C | `6bae5e1d7f` | B, with the `scopes` member moved into an interface. |
+| D | `f8550a244a` | B plus the direct-placement mapped type, with the fixed union. |
+
+Findings from A to D:
+
+- **The belief about direct placement was right.** Removing it from the first spike saves 182,000 instantiations in the package, which is 12 points of the 21.
+- **The state member can be removed (B).** Every chained method and every include refinement already passes `TContract` on, so a phantom optional member on the contract type argument reaches them all. When no contribution is passed, the type argument is exactly `TContract`. The type tests for chained collections, include refinements and custom classes pass.
+- **An interface does not make `scopes` cheaper (C).** It costs more than the inline object type in both B and E.
+- **The fixed union is `keyof CollectionImpl<Contract<SqlStorage>, string, unknown, DefaultCollectionTypeState>`** plus `scopes` and the five built-in aggregate names. It has no type parameters, so TypeScript computes it once. An aggregate that an extension contributes, such as `stddev`, is not in the union.
+
+### Variant E: what was built
+
+- `sql-orm-client/src/scopes.ts` exports `interface CollectionScopeRegistry {}`. A key is a contribution id. An entry extends `ScopeOperationsShape`, which has four members: `match`, `index`, `collection` and `operations`.
+- An index has a scope when its literal type is assignable to the `match` type of at least one entry. The operations of all matching entries are intersected.
+- `Collection` gains one member: `{ readonly scopes: ... }`. `CollectionTypeState`, `orm()`, `OrmOptions`, `postgres()` and `PostgresClient` have the same signatures as on main.
+- The runtime half is a new optional member `collectionScopes` on the component descriptors, next to `queryOperations`. `createExecutionContext` collects it into `ExecutionContext.collectionScopes`. The ORM client reads it from there.
+- The Postgres facade registers `postgres/fulltext` in `postgres/src/runtime/fulltext-scope.ts`. The pgvector package registers `pgvector/spike` in `pgvector/src/core/spike-scope.ts`. It stands in for a third-party extension.
+
+A contributing package writes this:
+
+```ts
+export interface PostgresFullTextScope extends ScopeOperationsShape {
+  readonly match: { readonly type: 'gin'; readonly expression: string };
+  readonly operations: PostgresFullTextOperations<this['index'], this['collection']>;
+}
+
+declare module '@internal/sql-orm-client' {
+  interface CollectionScopeRegistry {
+    readonly 'postgres/fulltext': PostgresFullTextScope;
+  }
+}
+```
+
+### Variant E: results for each question
+
+**1. Is a contribution from another package picked up through built output?** Yes, after two fixes to the build. The demo consumes only the `dist/*.d.mts` files of the published packages under `packages/9-public`.
+
+- **The module specifier.** Source in the workspace names `@internal/sql-orm-client`. The published declaration file must name `@prisma/orm-family-sql/orm-client`, because that is where the registry interface is declared for a user.
+- **The internal name breaks it, silently.** The shell build copied `declare module '@internal/sql-orm-client'` into the published file unchanged. TypeScript reported no error, and `scopes` was `{}`. The probe failed with "Property 'post_title_search' does not exist on type '{}'".
+- **Fix 1:** `packages/0-config/tsdown/shell-build.ts` now rewrites `declare module '@internal/...'` to the published name, as it already does for `import('@internal/...')`. With the fix the probe passes.
+- **Fix 2:** the declaration bundler drops a `declare module` block when nothing from its file is exported by the package entry point. It gives no warning. Exporting one type from the file through the entry point keeps the block.
+- **A user-land extension can name the facade instead.** `declare module '@prisma/orm-postgres/orm-client'` works, although that module only re-exports the registry with `export *`. Probe: `demo-probe-registry-reexport.test-d.ts.txt`.
+- **The contributing package must depend on the package it names.** pgvector needed `@internal/sql-orm-client` added to its dependencies.
+
+**2. Requirements (a) to (f).** All hold except direct placement in (d). Type tests: `sql-orm-client/test/scopes.types.test-d.ts` (11 tests) and `demo-probe-registry.test-d.ts.txt`.
+
+**3. Does per-index typing still work?** Yes. The `this['index']` and `this['collection']` slots from the first spike work unchanged inside a registry entry. The demo probe reads the literal `expression` and the literal physical name of the index from two different contributions, and the scope operation returns the model's collection. One change was needed: testing an entry with `extends ScopeOperationsShape` gave error TS2589, "excessively deep". Reading `match` by indexed access avoids it.
+
+**4. Cost.** See the table.
+
+**5. The extension is imported but not passed at runtime.**
+
+- **The types cannot tell.** The registry belongs to the whole program. Once any file imports the extension, every client in the program is typed as having its scopes. Two clients with different extension lists get the same types.
+- **The existing check already fails at construction when the contract lists the extension.** The emitted contract lists every extension that was composed at emit time under `extensions`. The demo contract lists `pgvector`. Building the demo client without it throws "Contract requires extension pack(s) 'pgvector', but runtime descriptors do not provide matching component(s)." Test: `demo-missing-extension.test.ts.txt`, run inside the demo. An index of an extension's kind can only reach the contract through that extension, so this covers the normal case with no new code.
+- **The gap is a package that is not in the contract.** A package that only contributes scopes for an index kind owned by someone else is not listed. For that case the spike adds a second check. It reads an assumed field, `options.requiresScopes`, a list of contribution ids on the index entry. `orm()` throws at construction when an id has no runtime contribution. The message is: "Index 'search' on table 'public.posts' needs the collection scope contribution 'test/fulltext', but no component passed to the client provides it. Pass the extension that declares 'test/fulltext' in `extensions`." Test: "fails at construction when the contract needs a contribution that was not passed" in `test/scopes.test.ts`.
+- **With neither, there is no error at construction.** The first call to the operation fails because the member is undefined.
+
+### Variant E: caveats
+
+- **Custom collection classes improve.** A custom class extends the `Collection` type, so it has `scopes` inside the class body and after a chained call. The first spike's caveat 4 no longer applies. No wrapper type is needed in `orm()`.
+- **Direct placement conflicts with custom classes.** With direct placement the base type has a member for each scope. A custom class that declares a method with the same name as a scope gets compile error TS2416 on the method. Requirement (d) says the scope should only lose direct placement. This is the "partly" in the table.
+- **Two packages that register the same id** should get a compile error from declaration merging. This was not tested.
+- **The first spike's caveats 1, 2, 6 and 7 still apply.** Caveat 3, the inference problem, is gone.
+
+### Recommendation
+
+1. Use variant E: the registry, with `scopes.<name>` only.
+2. Drop direct placement, or accept that every user pays about 4% in an application and 8% to 11% in the ORM client package for it. No cheap form was found.
+3. Change the shell build as in fix 1, and make it fail when a `declare module` block in source is missing from the built declaration file. Both failures are silent today.
+4. Decide whether a package may contribute scopes without being listed in the contract. If it may, the contract must name the contribution an index needs.
+
+Files: the probes are in this folder with a `.txt` suffix. `measure.sh.txt` is the script that produced every number.
