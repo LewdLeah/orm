@@ -76,7 +76,6 @@ const BSON_TYPE_BY_TAG: Readonly<Record<string, string>> = {
   Timestamp: 'timestamp',
   BSONSymbol: 'symbol',
   Code: 'javascript',
-  DBRef: 'dbPointer',
   MinKey: 'minKey',
   MaxKey: 'maxKey',
 };
@@ -100,8 +99,35 @@ function finiteDouble(value: number, path: string): number {
   return Number.isFinite(value) ? value : decodeRefused('double', path);
 }
 
+interface DbRefShape {
+  readonly collection: unknown;
+  readonly oid: unknown;
+  readonly db?: unknown;
+  readonly fields: Record<string, unknown>;
+}
+
+/**
+ * The `bson` library reads any subdocument with a string `$ref` and an `$id` as a `DBRef`. It was stored as a plain object, so it decodes back to `{ $ref, $id[, $db], ...fields }`, each member with its own path.
+ */
+function decodeDbRef(value: DbRefShape, path: string): JsonValue {
+  const entries: [string, unknown][] = [
+    ['$ref', value.collection],
+    ['$id', value.oid],
+  ];
+  if (value.db !== undefined) entries.push(['$db', value.db]);
+  entries.push(...Object.entries(value.fields));
+  return Object.fromEntries(
+    entries.map(([key, entry]) => [key, decodeValue(entry, child(path, key))]),
+  );
+}
+
 function decodeTagged(value: object, tag: string, path: string): JsonValue {
   switch (tag) {
+    case 'DBRef':
+      return decodeDbRef(
+        blindCast<DbRefShape, 'a bson DBRef carries collection, oid, db and fields'>(value),
+        path,
+      );
     case 'Long':
       return safeLong(
         blindCast<{ toBigInt(): bigint }, 'a BSON Long carries toBigInt'>(value).toBigInt(),

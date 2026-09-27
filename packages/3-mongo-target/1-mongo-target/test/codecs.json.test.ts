@@ -1,6 +1,7 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   Binary,
+  BSON,
   BSONRegExp,
   BSONSymbol,
   Code,
@@ -122,7 +123,6 @@ describe('mongoJsonCodec decode', () => {
     ['undefined', undefined],
     ['symbol', new BSONSymbol('s')],
     ['javascript', new Code('x')],
-    ['dbPointer', new DBRef('c', new ObjectId())],
     ['minKey', new MinKey()],
     ['maxKey', new MaxKey()],
   ])('refuses a BSON %s nested in an object and an array, naming the path', async (type, value) => {
@@ -135,6 +135,34 @@ describe('mongoJsonCodec decode', () => {
     await expect(mongoJsonCodec.decode(wire({ m: new Map([['k', 1]]) }), {})).rejects.toThrow(
       decodeRefusal('Map', 'm'),
     );
+  });
+
+  describe('a subdocument that bson reads as a DBRef', () => {
+    function throughBson(document: Record<string, unknown>): JsonValue {
+      return wire(BSON.deserialize(BSON.serialize(document)));
+    }
+
+    it('decodes back to the document it was stored as', async () => {
+      const document = {
+        link: { $ref: 'posts', $id: 7, $db: 'blog', extra: { tags: ['a'] } },
+        noDb: { $ref: 'posts', $id: 'abc' },
+      };
+      const stored = throughBson(document);
+      expect((stored as Record<string, unknown>)['link']).toBeInstanceOf(DBRef);
+      expect(await mongoJsonCodec.decode(stored, {})).toEqual(document);
+    });
+
+    it('decodes each member with its own path', async () => {
+      await expect(
+        mongoJsonCodec.decode(throughBson({ link: { $ref: 'posts', $id: new ObjectId() } }), {}),
+      ).rejects.toThrow(decodeRefusal('objectId', 'link.$id'));
+      await expect(
+        mongoJsonCodec.decode(
+          throughBson({ link: { $ref: 'posts', $id: 1, extra: { at: new Date(0) } } }),
+          {},
+        ),
+      ).rejects.toThrow(decodeRefusal('date', 'link.extra.at'));
+    });
   });
 
   it('says "the root" when the wire value itself is not JSON', async () => {

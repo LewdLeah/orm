@@ -28,11 +28,21 @@ export const mongoFamilyEnumEntityDescriptor = {
       }
       const { codecId, codecSpan } = resolved;
 
-      const nativeType = ctx.codecLookup?.targetTypesFor(codecId)?.[0];
-      if (nativeType === undefined) {
+      const storageTypes = ctx.codecLookup?.targetTypesFor(codecId);
+      if (storageTypes === undefined) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" @@type references unknown codec "${codecId}"`,
+          sourceId,
+          span: codecSpan,
+        });
+        return undefined;
+      }
+      const [nativeType, ...otherStorageTypes] = storageTypes;
+      if (nativeType === undefined || otherStorageTypes.length > 0) {
+        diagnostics?.push({
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `Enum "${block.name}": codec "${codecId}" declares ${storageTypes.length} storage types; an enum needs exactly one.`,
           sourceId,
           span: codecSpan,
         });
