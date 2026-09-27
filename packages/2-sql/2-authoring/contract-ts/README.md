@@ -63,6 +63,8 @@ Built-in ID helpers from `@internal/ids` already return the generated-field spec
 
 Storage defaults are values passed to `.default(...)`: a literal, `now()`, `autoincrement()`, or raw SQL written with the `sql` template tag, such as `` .default(sql`gen_random_uuid()`) `` or `` .default(sql`(now() + interval '7 days')`) ``. The `sql` body is canonicalized like PSL's `` @default(sql`...`) `` and used verbatim. JavaScript interpolation is a type error; to put the two characters `${` in the body, write `\${`, which the tag resolves. PSL needs no escape there. As in PSL, `` sql`now()` `` and `` sql`autoincrement()` `` are refused with `CONTRACT.DEFAULT_INVALID`: write `.default(now())` or `.default(autoincrement())`. `.defaultSql('...')` still works but is deprecated and is removed in 8.0.0.
 
+A literal passed to `.default(value)` is a value of the column codec's in-memory type. The codec's `encodeJson` turns it into the form `contract.json` stores, and a value the codec refuses fails the build with `CONTRACT.DEFAULT_INVALID`, naming the model, field and codec. The Postgres and SQLite `defineContract` facades look up the target's built-in codecs and the codecs of `extensions` for this; pass `codecLookup` to use your own. On Postgres, `field.dateTime()` takes a `Temporal.Instant`, `field.temporal.timestamptzJsDate()` takes a `Date`, and `field.temporal.timestamptzString()` takes an ISO 8601 string.
+
 ```typescript
 import { textColumn, timestamptzColumn } from '@internal/adapter-postgres/column-types';
 import sqlFamily from '@internal/family-sql/pack';
